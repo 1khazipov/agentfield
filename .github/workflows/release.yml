@@ -293,7 +293,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v6
         with:
           version: '~> v2'
-          args: ${{ needs.prepare.outputs.goreleaser_args }} --skip=build --skip=before
+          args: ${{ needs.prepare.outputs.goreleaser_args }} --skip=validate --skip=before
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
