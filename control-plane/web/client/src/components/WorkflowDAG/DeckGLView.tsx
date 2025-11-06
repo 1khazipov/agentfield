@@ -97,16 +97,35 @@ function hslToRgb(h: number, s: number, l: number): [number, number, number] {
   return [r, g, b];
 }
 
+// Professional color palette optimized for dark backgrounds
+const PROFESSIONAL_PALETTE = [
+  { h: 210, s: 48, l: 62 }, // Soft blue
+  { h: 165, s: 45, l: 58 }, // Teal
+  { h: 280, s: 50, l: 64 }, // Purple
+  { h: 30, s: 52, l: 62 },  // Coral
+  { h: 340, s: 48, l: 64 }, // Pink
+  { h: 130, s: 42, l: 58 }, // Green
+  { h: 45, s: 50, l: 60 },  // Amber
+  { h: 260, s: 46, l: 62 }, // Violet
+  { h: 190, s: 44, l: 60 }, // Cyan
+  { h: 15, s: 48, l: 62 },  // Orange-red
+];
+
 function getAgentColor(agentId: string, index: number): {
   rgb: [number, number, number];
   css: string;
 } {
   const hash = hashString(agentId || `agent-${index}`);
-  const golden = 0.6180339887498948;
-  const hue = (hash * golden * 360) % 360;
-  const saturation = 65 + (hash % 15); // 65-80%
-  const lightness = 50 + (hash % 12); // 50-62%
-  const rgb = hslToRgb(hue, saturation, lightness);
+
+  // Use professional palette with consistent distribution
+  const paletteIndex = hash % PROFESSIONAL_PALETTE.length;
+  const palette = PROFESSIONAL_PALETTE[paletteIndex];
+
+  // Add slight variation to avoid exact duplicates
+  const hueVariation = (hash % 20) - 10; // ±10 degrees
+  const hue = (palette.h + hueVariation + 360) % 360;
+
+  const rgb = hslToRgb(hue, palette.s, palette.l);
   return { rgb, css: `rgb(${rgb.join(",")})` };
 }
 
@@ -162,42 +181,24 @@ export const WorkflowDeckGLView = ({
   }, [viewState.zoom]);
 
   const layers = useMemo(() => {
-    const glowLayer = new ScatterplotLayer<DeckNode>({
-      id: "workflow-node-glow",
-      data: nodes,
-      pickable: false,
-      radiusScale: 1,
-      radiusMinPixels: 8,
-      radiusMaxPixels: 100,
-      getPosition: (node) => node.position,
-      getRadius: (node) => node.radius * 2.2 * inverseZoom,
-      getFillColor: (node) => node.glowColor,
-      coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-      updateTriggers: {
-        getRadius: inverseZoom,
-      },
-    });
-
     const nodeLayer = new ScatterplotLayer<DeckNode>({
       id: "workflow-nodes",
       data: nodes,
       pickable: true,
       radiusScale: 1,
-      radiusMinPixels: 4,
-      radiusMaxPixels: 80,
+      radiusMinPixels: 2,
+      radiusMaxPixels: 24,
       getPosition: (node) => node.position,
-      getRadius: (node) => node.radius * inverseZoom,
+      getRadius: (node) => node.radius,
       getFillColor: (node) => node.fillColor,
       getLineColor: (node) => node.borderColor,
-      getLineWidth: () => 1.5,
-      lineWidthMinPixels: 1.5,
+      getLineWidth: () => 1.2,
+      lineWidthMinPixels: 1,
+      lineWidthMaxPixels: 2,
       stroked: true,
       autoHighlight: true,
       highlightColor: [255, 255, 255, 200],
       coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-      updateTriggers: {
-        getRadius: inverseZoom,
-      },
       onClick: (info) => {
         const deckNode = info.object;
         if (deckNode?.original) {
@@ -228,24 +229,55 @@ export const WorkflowDeckGLView = ({
       coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
     });
 
-    return [edgeLayer, glowLayer, nodeLayer];
+    return [edgeLayer, nodeLayer];
   }, [nodes, edges, onNodeClick, onNodeHover, inverseZoom]);
 
   return (
-    <DeckGL
-      views={new OrthographicView({})}
-      controller={{ type: OrthographicController, inertia: true }}
-      viewState={viewState}
-      onViewStateChange={({ viewState: next }) =>
-        setViewState(next as OrthographicViewState)
-      }
-      layers={layers}
-      style={{ width: "100%", height: "100%" }}
-    />
+    <div className="relative h-full w-full bg-muted/30">
+      <DeckGL
+        views={new OrthographicView({})}
+        controller={{ type: OrthographicController, inertia: true }}
+        viewState={viewState}
+        onViewStateChange={({ viewState: next }) =>
+          setViewState(next as OrthographicViewState)
+        }
+        layers={layers}
+        style={{ width: "100%", height: "100%" }}
+      />
+    </div>
   );
 };
 
 const BACKGROUND_RGB: [number, number, number] = [11, 18, 32];
+
+// Status color mapping matching React Flow's status system
+const STATUS_COLORS: Record<string, [number, number, number]> = {
+  succeeded: [34, 197, 94],    // Green - matches --status-success
+  failed: [239, 68, 68],       // Red - matches --status-error
+  running: [59, 130, 246],     // Blue - matches --status-info
+  pending: [251, 191, 36],     // Amber - matches --status-warning
+  queued: [251, 191, 36],      // Amber - matches --status-warning
+  timeout: [148, 163, 184],    // Neutral gray
+  cancelled: [148, 163, 184],  // Neutral gray
+  unknown: [148, 163, 184],    // Neutral gray
+};
+
+function normalizeStatus(status: string): string {
+  const normalized = status.toLowerCase();
+  if (normalized.includes('success') || normalized.includes('complete')) return 'succeeded';
+  if (normalized.includes('fail') || normalized.includes('error')) return 'failed';
+  if (normalized.includes('run') || normalized.includes('progress')) return 'running';
+  if (normalized.includes('pend')) return 'pending';
+  if (normalized.includes('queue')) return 'queued';
+  if (normalized.includes('timeout')) return 'timeout';
+  if (normalized.includes('cancel')) return 'cancelled';
+  return normalized;
+}
+
+function getStatusColor(status: string): [number, number, number] {
+  const normalized = normalizeStatus(status);
+  return STATUS_COLORS[normalized] || STATUS_COLORS.unknown;
+}
 
 /**
  * Create a smooth cubic Bezier curve between two points
@@ -256,18 +288,18 @@ function createCubicBezier(
   target: [number, number, number],
   curvature: number = 0.5
 ): [number, number, number][] {
-  const dx = target[0] - source[0];
+  const dy = target[1] - source[1];
 
-  // Control points for smooth S-curve
+  // Control points for smooth S-curve (top-to-bottom flow)
   const control1: [number, number, number] = [
-    source[0] + dx * curvature,
-    source[1],
+    source[0],
+    source[1] + dy * curvature,
     source[2],
   ];
 
   const control2: [number, number, number] = [
-    target[0] - dx * curvature,
-    target[1],
+    target[0],
+    target[1] - dy * curvature,
     target[2],
   ];
 
@@ -305,8 +337,8 @@ function createCubicBezier(
  */
 export function buildDeckGraph(
   timeline: WorkflowDAGNode[],
-  horizontalSpacing: number = 200,
-  verticalSpacing: number = 80
+  horizontalSpacing: number = 120,
+  verticalSpacing: number = 100
 ): DeckGraphData {
   if (!timeline.length) {
     return { nodes: [], edges: [], agentPalette: [] };
@@ -444,12 +476,12 @@ export function buildDeckGraph(
   >();
 
   layers.forEach((layerNodes, layerIndex) => {
-    const layerHeight = (layerNodes.length - 1) * verticalSpacing;
-    const startY = -layerHeight / 2;
+    const layerWidth = (layerNodes.length - 1) * horizontalSpacing;
+    const startX = -layerWidth / 2;
 
     layerNodes.forEach((node, indexInLayer) => {
-      const x = layerIndex * horizontalSpacing;
-      const y = startY + indexInLayer * verticalSpacing;
+      const x = startX + indexInLayer * horizontalSpacing;
+      const y = layerIndex * verticalSpacing;
       const z = 0; // Keep flat for now
 
       const agentId = node.agent_node_id || node.reasoner_id || "agent";
@@ -471,17 +503,33 @@ export function buildDeckGraph(
     });
   });
 
-  // Create deck nodes
+  // Create deck nodes with depth-based opacity and status-based colors
   const deckNodes: DeckNode[] = [];
+  const maxDepth = Math.max(...Array.from(layoutInfo.values()).map(i => i.layer));
+
   layoutInfo.forEach((info, nodeId) => {
-    const fill = [...info.color, 240] as [number, number, number, number];
-    const border = [...mixColor(info.color, BACKGROUND_RGB, 0.4), 255] as [
+    const node = nodeById.get(nodeId)!;
+    const statusColor = getStatusColor(node.status);
+
+    // Mix agent color (70%) with status color (30%) for visual distinction
+    const mixedColor = mixColor(info.color, statusColor, 0.7);
+
+    // Subtle depth-based opacity fade (240 -> 200 over full depth)
+    const depthFactor = maxDepth > 0 ? info.layer / maxDepth : 0;
+    const opacity = Math.round(240 - depthFactor * 40);
+
+    const fill = [...mixedColor, opacity] as [number, number, number, number];
+
+    // Border uses agent color for consistency
+    const border = [...mixColor(info.color, BACKGROUND_RGB, 0.35), 255] as [
       number,
       number,
       number,
       number,
     ];
-    const glow = [...mixColor(info.color, [255, 255, 255], 0.25), 90] as [
+
+    // Glow uses status color for visual feedback
+    const glow = [...mixColor(statusColor, [255, 255, 255], 0.25), 90] as [
       number,
       number,
       number,
@@ -516,20 +564,23 @@ export function buildDeckGraph(
     const source = parentInfo.position;
     const target = childInfo.position;
 
-    // Calculate curvature based on distance
-    const dx = Math.abs(target[0] - source[0]);
-    const curvature = Math.min(0.6, 0.3 + dx / 1000);
+    // Calculate curvature based on distance (top-to-bottom)
+    const dy = Math.abs(target[1] - source[1]);
+    const curvature = Math.min(0.6, 0.3 + dy / 1000);
 
     const path = createCubicBezier(source, target, curvature);
 
     const baseColor = parentInfo.color;
+    // Softer edge colors with depth-based opacity
+    const depthFactor = maxDepth > 0 ? childInfo.layer / maxDepth : 0;
+    const edgeOpacity = Math.round(120 - depthFactor * 30); // 120 -> 90
     const edgeColor = [
-      ...mixColor(baseColor, BACKGROUND_RGB, 0.5),
-      140,
+      ...mixColor(baseColor, BACKGROUND_RGB, 0.55),
+      edgeOpacity,
     ] as [number, number, number, number];
 
     // Edge width decreases with depth
-    const width = Math.max(1.2, 2.5 - childInfo.layer * 0.15);
+    const width = Math.max(1, 2.2 - childInfo.layer * 0.12);
 
     deckEdges.push({
       id: `${node.parent_execution_id}-${node.execution_id}`,

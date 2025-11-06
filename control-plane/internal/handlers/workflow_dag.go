@@ -313,12 +313,37 @@ func buildExecutionDAG(executions []*types.Execution) (WorkflowDAGNode, []Workfl
 
 	dag := buildNode(rootExec, 0)
 
+	// Compute depth for each execution (same logic as lightweight DAG)
+	depthCache := make(map[string]int, len(executions))
+	var computeDepth func(exec *types.Execution) int
+	computeDepth = func(exec *types.Execution) int {
+		if exec == nil {
+			return 0
+		}
+		if depth, ok := depthCache[exec.ExecutionID]; ok {
+			return depth
+		}
+		depth := 0
+		if exec.ParentExecutionID != nil && *exec.ParentExecutionID != "" {
+			if parent, ok := execMap[*exec.ParentExecutionID]; ok {
+				depth = computeDepth(parent) + 1
+			}
+		}
+		if depth > maxDepth {
+			maxDepth = depth
+		}
+		depthCache[exec.ExecutionID] = depth
+		return depth
+	}
+
 	timeline := make([]WorkflowDAGNode, 0, len(executions))
 	sort.Slice(executions, func(i, j int) bool {
 		return executions[i].StartedAt.Before(executions[j].StartedAt)
 	})
 	for _, exec := range executions {
-		node := executionToDAGNode(exec, 0)
+		// Compute the actual depth from parent relationships
+		depth := computeDepth(exec)
+		node := executionToDAGNode(exec, depth)
 		node.Children = nil
 		timeline = append(timeline, node)
 	}

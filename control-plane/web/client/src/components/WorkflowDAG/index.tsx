@@ -25,6 +25,11 @@ import { NodeDetailSidebar } from "./NodeDetailSidebar";
 import { VirtualizedDAG } from "./VirtualizedDAG";
 import { WorkflowNode } from "./WorkflowNode";
 import { LayoutManager, type AllLayoutType } from "./layouts/LayoutManager";
+import {
+  WorkflowDeckGLView,
+  buildDeckGraph,
+  type DeckGraphData,
+} from "./DeckGLView";
 
 import { getWorkflowDAG } from "../../services/workflowsApi";
 import type {
@@ -171,6 +176,7 @@ function WorkflowDAGViewerInner({
   const [internalDagData, setInternalDagData] =
     useState<WorkflowDAGResponse | null>(null);
   const largeGraphRef = useRef(false);
+  const [deckGraphData, setDeckGraphData] = useState<DeckGraphData | null>(null);
 
   const externalDagData = useMemo<WorkflowDAGResponse | null>(() => {
     if (dagData === undefined || dagData === null) {
@@ -1050,6 +1056,30 @@ function decorateEdgesWithStatus(
         const defaultLayout = layoutManager.getDefaultLayout(nodeCount);
         const useSimpleLayout = nodeCount > LARGE_GRAPH_LAYOUT_THRESHOLD;
         largeGraphRef.current = useSimpleLayout;
+        const { nodesForLayout, edgesForLayout, executionMap } =
+          buildGraphElements(timeline);
+
+        // For large graphs, build DeckGL data instead of React Flow layout
+        if (useSimpleLayout) {
+          const flowNodes = applySimpleGridLayout(
+            nodesForLayout,
+            executionMap
+          );
+          const nodesWithMode = decorateNodesWithViewMode(flowNodes, viewMode);
+          const edgesWithStatus = decorateEdgesWithStatus(
+            edgesForLayout,
+            executionMap
+          );
+          setNodes(nodesWithMode);
+          setEdges(edgesWithStatus);
+          nodesRef.current = nodesWithMode;
+          edgesRef.current = edgesWithStatus;
+          setVisualEpoch((epoch) => epoch + 1);
+          const deckData = buildDeckGraph(timeline);
+          setDeckGraphData(deckData);
+          hasInitialLayoutRef.current = true;
+          return; // Skip React Flow layout
+        }
 
         // Update current layout if it's still the initial "tree" value
         if (!useSimpleLayout && currentLayout === "tree" && defaultLayout !== "tree") {
@@ -1060,24 +1090,18 @@ function decorateEdgesWithStatus(
         if (!hasInitialLayoutRef.current) {
           const layoutToUse =
             currentLayout === "tree" ? defaultLayout : currentLayout;
-          const { nodesForLayout, edgesForLayout, executionMap } =
-            buildGraphElements(timeline);
 
           let flowNodes: Node[];
           let flowEdges: Edge[] = edgesForLayout;
 
-          if (useSimpleLayout) {
-            flowNodes = applySimpleGridLayout(nodesForLayout, executionMap);
-          } else {
-            const { nodes: layoutedNodes, edges: layoutedEdges } =
-              await layoutManager.applyLayout(
-                nodesForLayout,
-                edgesForLayout,
-                layoutToUse
-              );
-            flowNodes = layoutedNodes;
-            flowEdges = layoutedEdges;
-          }
+          const { nodes: layoutedNodes, edges: layoutedEdges } =
+            await layoutManager.applyLayout(
+              nodesForLayout,
+              edgesForLayout,
+              layoutToUse
+            );
+          flowNodes = layoutedNodes;
+          flowEdges = layoutedEdges;
 
           const nodesWithMode = decorateNodesWithViewMode(flowNodes, viewMode);
           const edgesWithStatus = decorateEdgesWithStatus(
@@ -1154,7 +1178,85 @@ function decorateEdgesWithStatus(
   }
 
   const isLargeGraph = nodes.length > LARGE_GRAPH_LAYOUT_THRESHOLD;
+  const shouldUseDeckGL = nodes.length >= LARGE_GRAPH_LAYOUT_THRESHOLD;
 
+  // Handler for DeckGL node clicks - convert DeckGL node type to local type
+  const handleDeckNodeClick = useCallback(
+    (node: any) => {
+      // Ensure workflow_id is set
+      const localNode: WorkflowDAGNode = {
+        ...node,
+        workflow_id: node.workflow_id || workflowId,
+      };
+      setSelectedNode(localNode);
+      setSidebarOpen(true);
+    },
+    [workflowId]
+  );
+
+  // Handler for DeckGL node hover
+  const handleDeckNodeHover = useCallback(
+    (_node: any) => {
+      // Optional: Add hover state handling if needed
+    },
+    []
+  );
+
+  // Render DeckGL view for large graphs
+  if (shouldUseDeckGL && deckGraphData) {
+    return (
+      <div className={cn("relative h-full w-full", className)}>
+        <div className="flex h-full w-full flex-col">
+          <div className="flex-1 overflow-hidden min-h-0">
+            <div className="relative flex h-full w-full flex-1 overflow-hidden min-h-0">
+              <WorkflowDeckGLView
+                nodes={deckGraphData.nodes}
+                edges={deckGraphData.edges}
+                onNodeClick={handleDeckNodeClick}
+                onNodeHover={handleDeckNodeHover}
+              />
+
+              {/* Agent Legend - positioned in top-left */}
+              <div className="absolute top-4 left-4 z-30">
+                <AgentLegend
+                  onAgentFilter={handleAgentFilter}
+                  selectedAgent={selectedAgent}
+                  compact={false}
+                  nodes={nodes}
+                />
+              </div>
+
+              {/* Large Graph Indicator - positioned in top-right */}
+              <div className="absolute top-4 right-4 z-30">
+                <Card className="bg-card/95 backdrop-blur-sm border-border shadow-lg">
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-2 text-sm">
+                      <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                      <span className="font-medium text-foreground">
+                        Large Graph Mode
+                      </span>
+                      <span className="text-muted-foreground">
+                        ({nodes.length.toLocaleString()} nodes)
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Node Detail Sidebar */}
+        <NodeDetailSidebar
+          node={selectedNode}
+          isOpen={sidebarOpen}
+          onClose={handleCloseSidebar}
+        />
+      </div>
+    );
+  }
+
+  // Render React Flow for normal-sized graphs
   return (
     <div className={cn("relative h-full w-full", className)}>
       <div className="flex h-full w-full flex-col">
