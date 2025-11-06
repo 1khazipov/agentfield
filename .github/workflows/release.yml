@@ -251,52 +251,64 @@ jobs:
           name: dist-darwin
           path: dist
 
-      - name: Merge artifact metadata
+      - name: Merge binaries and create checksums
         shell: bash
         run: |
           set -euo pipefail
-          if compgen -G "dist/artifacts-*.json" >/dev/null; then
-            jq -s 'add' dist/artifacts-*.json > dist/artifacts.json
-          fi
 
-          for suffix in linux darwin; do
-            if [ -f "dist/metadata-${suffix}.json" ]; then
-              cp "dist/metadata-${suffix}.json" dist/metadata.json
-              break
-            fi
-          done
+          # List all downloaded binaries
+          echo "Downloaded binaries:"
+          ls -lah dist/
 
-          for suffix in linux darwin; do
-            if [ -f "dist/config-${suffix}.yaml" ]; then
-              cp "dist/config-${suffix}.yaml" dist/config.yaml
-              break
-            fi
-          done
+          # Generate checksums
+          cd dist
+          sha256sum agentfield-* > checksums.txt
+          cat checksums.txt
+          cd ..
 
-      - name: Prepare GoReleaser args for publish
-        id: publish_args
-        shell: bash
-        env:
-          ORIGINAL_ARGS: ${{ needs.prepare.outputs.goreleaser_args }}
-        run: |
-          set -euo pipefail
-          # Remove --clean flag since we want to use pre-built binaries
-          PUBLISH_ARGS="${ORIGINAL_ARGS/--clean/}"
-          echo "args=${PUBLISH_ARGS}" >> "$GITHUB_OUTPUT"
-
-      - name: Run GoReleaser release
-        uses: goreleaser/goreleaser-action@v6
+      - name: Create GitHub Release
+        if: needs.prepare.outputs.release_upload == 'true'
+        uses: softprops/action-gh-release@v2
         with:
-          version: '~> v2'
-          args: ${{ steps.publish_args.outputs.args }} --skip=validate --skip=before
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ needs.prepare.outputs.tag_name || github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(needs.prepare.outputs.tag_name, 'alpha') || contains(needs.prepare.outputs.tag_name, 'beta') || contains(needs.prepare.outputs.tag_name, 'rc') }}
+          generate_release_notes: true
+          body: |
+            ## AgentField ${{ needs.prepare.outputs.tag_name || github.ref_name }}
 
-      - name: Upload GoReleaser artifacts
+            ### Installation
+
+            **Installation:**
+            ```bash
+            curl -fsSL https://agentfield.ai/install.sh | bash
+            ```
+
+            ### Version Pinning
+
+            ```bash
+            VERSION=${{ needs.prepare.outputs.tag_name || github.ref_name }} curl -fsSL https://agentfield.ai/install.sh | bash
+            ```
+
+            ### Manual Download
+
+            Download the binary for your platform below, make it executable, and move it to your PATH.
+
+            ### Supported Platforms
+
+            - **macOS Intel:** `agentfield-darwin-amd64`
+            - **macOS Apple Silicon:** `agentfield-darwin-arm64`
+            - **Linux x86_64:** `agentfield-linux-amd64`
+            - **Linux ARM64:** `agentfield-linux-arm64`
+          files: |
+            dist/agentfield-*
+            dist/checksums.txt
+
+      - name: Upload build artifacts
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: goreleaser-dist
+          name: binaries-dist
           path: dist/
 
       - name: Build Python package
