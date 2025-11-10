@@ -4,7 +4,7 @@
 
 > **👋 Welcome Early Adopter!**
 >
-> You've discovered AgentField before our official launch. We're currently in private beta, gathering feedback from early users to shape the future of the autonomous software. Feel free to explore and test, and we'd love to hear your thoughts! Share feedback via [GitHub Issues](https://github.com/agentfield/agentfield/issues) or email us at contact@agentfield.ai. Please note that features and APIs are still being refined before our public release.
+> You've discovered AgentField before our official launch. We're currently in private beta, gathering feedback from early users to shape the future of the autonomous software. Feel free to explore and test, and we'd love to hear your thoughts! Share feedback via [GitHub Issues](https://github.com/Agent-Field/agentfield/issues) or email us at contact@agentfield.ai. Please note that features and APIs are still being refined before our public release.
 
 ### Kubernetes for AI Agents - **Deploy, Scale, Observe, and Prove**
 
@@ -114,7 +114,7 @@ curl -X POST http://localhost:8080/api/v1/execute/greeting-agent.say_hello \
 
 ### From Prototype to Production
 
-| 🔴 Building Without AgentField                                                                                                                                                            | 💚 Building With AgentField                                                                                                                                                                                                            |
+| 🔴 Building Without AgentField                                                                                                                                                          | 💚 Building With AgentField                                                                                                                                                                                                          |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **No cryptographic identity** - agents are names in logs; when regulators ask "prove this AI made this decision," you have editable logs with no tamper-proof record                   | **DIDs + Verifiable Credentials** - every agent gets a W3C DID; every execution produces a signed VC; export cryptographic proof chains that auditors verify offline with `af verify audit.json`                                    |
 | **Monolithic deployments** - all agents in one codebase; Marketing team's update redeploys Support team's agents; coordination nightmare across teams                                  | **Control plane coordinates independent agents** - each team deploys their agent on their own schedule; discovery/routing/orchestration handled by stateless control plane; zero coordination needed                                |
