@@ -2,6 +2,10 @@
 
 <img src="assets/github hero.png" alt="AgentField - Kubernetes, for AI Agents" width="100%" />
 
+> **👋 Welcome Early Adopter!**
+>
+> You've discovered AgentField before our official launch. We're currently in private beta, gathering feedback from early users to shape the future of the autonomous software. Feel free to explore and test, and we'd love to hear your thoughts! Share feedback via [GitHub Issues](https://github.com/agentfield/agentfield/issues) or email us at contact@agentfield.ai. Please note that features and APIs are still being refined before our public release.
+
 ### Kubernetes for AI Agents - **Deploy, Scale, Observe, and Prove**
 
 Open-source (Apache-2.0) **control plane** that runs AI agents like microservices.
