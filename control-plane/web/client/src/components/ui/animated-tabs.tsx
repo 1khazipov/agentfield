@@ -83,12 +83,12 @@ const AnimatedTabsList = React.forwardRef<
   );
 
   return (
-    <div className="relative inline-flex w-fit">
+    <div className="relative inline-flex min-w-0 w-full">
       <TabsPrimitive.List
         ref={assignRef}
         data-slot="tabs-list"
         className={cn(
-          "relative inline-flex h-full items-center text-muted-foreground",
+          "relative inline-flex h-full items-center text-muted-foreground min-w-0",
           className
         )}
         {...props}

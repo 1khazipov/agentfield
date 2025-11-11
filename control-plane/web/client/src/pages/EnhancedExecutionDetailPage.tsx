@@ -266,40 +266,41 @@ export function EnhancedExecutionDetailPage() {
         />
 
         {/* Tab Navigation */}
-        <div className="h-12 border-b border-border bg-background flex items-center px-6">
+        <div className="h-12 border-b border-border bg-background flex items-center px-6 overflow-x-auto">
           <div className="flex flex-1 items-center gap-4 min-w-0">
             <AnimatedTabs
               value={activeTab}
               onValueChange={(value) => handleTabChange(value as TabType)}
               className="flex h-full min-w-0 flex-1 flex-col justify-center"
             >
-              <div className="h-full w-full overflow-hidden">
-                <div className="h-full w-full overflow-x-auto scrollbar-none">
-                  <AnimatedTabsList className="h-full w-max gap-1">
-                    {navigationTabs.map((tab) => {
-                      const Icon = tab.icon;
+              <AnimatedTabsList className="h-full gap-1 flex-nowrap">
+                {navigationTabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const hasError = tab.id === 'debug' && execution.error_message;
 
-                      return (
-                        <AnimatedTabsTrigger
-                          key={tab.id}
-                          value={tab.id}
-                          className="gap-2 px-3 py-2"
-                          title={`${tab.description} (Cmd/Ctrl + ${tab.shortcut})`}
-                        >
-                          <Icon className="w-4 h-4" />
-                          <span>{tab.label}</span>
+                  return (
+                    <AnimatedTabsTrigger
+                      key={tab.id}
+                      value={tab.id}
+                      className="gap-2 px-3 py-2 flex-shrink-0 relative"
+                      title={`${tab.description} (Cmd/Ctrl + ${tab.shortcut})`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span className="whitespace-nowrap">{tab.label}</span>
 
-                          {tab.count !== undefined && tab.count > 0 && (
-                            <Badge variant="count" size="sm" className="min-w-[20px]">
-                              {tab.count > 999 ? '999+' : tab.count}
-                            </Badge>
-                          )}
-                        </AnimatedTabsTrigger>
-                      );
-                    })}
-                  </AnimatedTabsList>
-                </div>
-              </div>
+                      {hasError && (
+                        <div className="w-2 h-2 bg-destructive rounded-full flex-shrink-0" />
+                      )}
+
+                      {tab.count !== undefined && tab.count > 0 && !hasError && (
+                        <Badge variant="count" size="sm" className="min-w-[20px]">
+                          {tab.count > 999 ? '999+' : tab.count}
+                        </Badge>
+                      )}
+                    </AnimatedTabsTrigger>
+                  );
+                })}
+              </AnimatedTabsList>
             </AnimatedTabs>
 
             <div className="hidden lg:flex flex-1 min-w-0 items-center justify-end gap-4 text-body-small">
@@ -389,10 +390,10 @@ export function EnhancedExecutionDetailPage() {
           {activeTab === 'debug' && (
             <div className="h-full overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-border p-6">
               <div className="space-y-6">
-                <ExecutionRetryPanel execution={execution} />
                 {execution.error_message && (
                   <RedesignedErrorPanel execution={execution} />
                 )}
+                <ExecutionRetryPanel execution={execution} />
               </div>
             </div>
           )}
