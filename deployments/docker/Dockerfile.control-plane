@@ -6,12 +6,19 @@ RUN --mount=type=cache,target=/root/.npm npm ci
 COPY control-plane/web/client/ .
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS go-builder
+FROM --platform=$BUILDPLATFORM golang:1.24-bookworm AS go-builder
 WORKDIR /app
 
 ARG TARGETOS
 ARG TARGETARCH
-ENV CGO_ENABLED=0
+ENV CGO_ENABLED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    pkg-config \
+    gcc-aarch64-linux-gnu \
+    libc6-dev-arm64-cross \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY control-plane/go.mod control-plane/go.sum ./control-plane/
 RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg/mod \
@@ -21,7 +28,9 @@ COPY control-plane/ ./control-plane/
 COPY --from=ui-builder /app/web/dist ./control-plane/web/client/dist
 
 RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg/mod \
-    cd control-plane && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /app/bin/agentfield-server ./cmd/agentfield-server
+    cd control-plane && \
+    if [ "${TARGETARCH}" = "arm64" ]; then export CC=aarch64-linux-gnu-gcc; else export CC=gcc; fi && \
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -tags "embedded sqlite_fts5" -o /app/bin/agentfield-server ./cmd/agentfield-server
 
 FROM gcr.io/distroless/base-debian12
 COPY --from=go-builder /app/bin/agentfield-server /usr/local/bin/agentfield-server
