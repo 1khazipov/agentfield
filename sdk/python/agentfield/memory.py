@@ -179,7 +179,7 @@ class MemoryClient:
             payload["scope"] = scope
 
         response = await self._async_request(
-            "DELETE",
+            "POST",
             f"{self.agentfield_client.api_base}/memory/delete",
             json=payload,
             headers=headers,

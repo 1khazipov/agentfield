@@ -425,10 +425,10 @@ class AgentFieldHTTPMocks:
 
     def mock_memory_delete(self, status: int = 200):
         url = f"{self.api_base}/memory/delete"
-        respx.delete(url).mock(
+        respx.post(url).mock(
             return_value=httpx.Response(status_code=status, json={"ok": True})
         )  # type: ignore
-        responses_lib.add(responses_lib.DELETE, url, json={"ok": True}, status=status)
+        responses_lib.add(responses_lib.POST, url, json={"ok": True}, status=status)
 
     def mock_memory_list(self, keys: List[str], status: int = 200):
         url = f"{self.api_base}/memory/list"
@@ -574,7 +574,7 @@ def fake_server(monkeypatch, request):
       - POST /api/v1/nodes/register          -> 201 Created
       - POST /api/v1/execute/{target}        -> 200 with {"result": {...}, "metadata": {...}}
       - POST /api/v1/memory/get              -> 200 with {"data": ...} or 404
-      - DELETE /api/v1/memory/delete         -> 200
+      - POST /api/v1/memory/delete           -> 200
       - GET /api/v1/memory/list?scope=...    -> 200 with [{"key": ...}, ...]
 
     How it works:
@@ -633,7 +633,7 @@ def fake_server(monkeypatch, request):
             )
         return JSONResponse(status_code=404, content={"error": "not_found"})
 
-    @app.delete("/api/v1/memory/delete")
+    @app.post("/api/v1/memory/delete")
     async def memory_delete(payload: Dict[str, Any]):
         key = payload.get("key")
         memory_store.pop(key, None)

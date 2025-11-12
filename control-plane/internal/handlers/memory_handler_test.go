@@ -157,10 +157,10 @@ func TestDeleteMemoryHandler_RemovesEntry(t *testing.T) {
 	_ = storage.SetMemory(context.Background(), &types.Memory{Scope: "global", ScopeID: "global", Key: "gamma", Data: json.RawMessage(`"value"`)})
 
 	router := gin.New()
-	router.DELETE("/memory/delete", DeleteMemoryHandler(storage))
+	router.POST("/memory/delete", DeleteMemoryHandler(storage))
 
 	body := `{"key":"gamma","scope":"global"}`
-	req := httptest.NewRequest(http.MethodDelete, "/memory/delete", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/memory/delete", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()

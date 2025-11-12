@@ -137,7 +137,7 @@ async def test_memory_client_uses_agentfield_async_request(dummy_headers):
 
     assert value == {"value": 42}
     methods = [call[0] for call in calls]
-    assert methods == ["POST", "POST", "DELETE"]
+    assert methods == ["POST", "POST", "POST"]
     assert calls[0][1].endswith("/memory/set")
     assert calls[1][1].endswith("/memory/get")
     assert calls[2][1].endswith("/memory/delete")

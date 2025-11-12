@@ -318,30 +318,38 @@ class AIConfig(BaseModel):
         if target_model in self.model_limits_cache:
             return self.model_limits_cache[target_model]
 
+        fallback_context = self._MODEL_CONTEXT_LIMITS.get(target_model)
+
         try:
             import litellm
 
             # Fetch model info once and cache it
             info = litellm.get_model_info(target_model)
-            limits = {
-                "context_length": getattr(
-                    info, "max_tokens", 131072
-                ),  # Default fallback
-                "max_output_tokens": getattr(info, "max_output_tokens", None),
-            }
-
-            # Cache the limits
-            self.model_limits_cache[target_model] = limits
-            return limits
 
         except Exception:
-            # Fallback to conservative defaults if model info fetch fails
-            fallback_limits = {
-                "context_length": 8192,  # Conservative default
-                "max_output_tokens": 4096,
-            }
-            self.model_limits_cache[target_model] = fallback_limits
-            return fallback_limits
+            info = None  # Ensure info is undefined outside except
+
+        if info is not None:
+            context_length = getattr(info, "max_tokens", None) or fallback_context or 131072
+            max_output = (
+                getattr(info, "max_output_tokens", None)
+                or getattr(info, "max_completion_tokens", None)
+            )
+        else:
+            context_length = fallback_context or 8192
+            max_output = None
+
+        if not max_output:
+            # Default to a conservative completion window capped at 32K
+            max_output = min(32768, max(2048, context_length // 4))
+
+        limits = {
+            "context_length": context_length,
+            "max_output_tokens": max_output,
+        }
+
+        self.model_limits_cache[target_model] = limits
+        return limits
 
     def trim_by_chars(self, text: str, limit: int, head_ratio: float = 0.2) -> str:
         """

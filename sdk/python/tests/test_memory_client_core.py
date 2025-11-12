@@ -116,7 +116,7 @@ async def test_get_returns_default_on_404(memory_client, monkeypatch):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_uses_delete_endpoint(memory_client, monkeypatch):
+async def test_delete_uses_post_endpoint(memory_client, monkeypatch):
     captured = {}
 
     class DummyAsyncClient:
@@ -138,7 +138,7 @@ async def test_delete_uses_delete_endpoint(memory_client, monkeypatch):
 
     await memory_client.delete("temp")
 
-    assert captured["method"] == "DELETE"
+    assert captured["method"] == "POST"
     assert captured["url"].endswith("/memory/delete")
     assert captured["json"]["key"] == "temp"  # type: ignore[index]
 
