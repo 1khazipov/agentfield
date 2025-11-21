@@ -244,13 +244,25 @@ async def test_router_prefix_translation_examples(
 
     router = AgentRouter(prefix=prefix)
 
-    @router.reasoner()
-    async def test_func() -> dict:
-        return {"result": "ok"}
+    # Create a function with the desired name using exec
+    func_code = f"""
+async def {func_name}() -> dict:
+    return {{"result": "ok"}}
+"""
+    namespace = {}
+    exec(func_code, namespace)
+    test_func = namespace[func_name]
 
-    # Rename the function to match the test case
-    test_func.__name__ = func_name
-    router.reasoners[0]["func"] = test_func
+    # Register the function manually
+    router.reasoners.append(
+        {
+            "func": test_func,
+            "path": None,
+            "tags": [],
+            "kwargs": {},
+            "registered": False,
+        }
+    )
 
     agent.include_router(router)
 
