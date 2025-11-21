@@ -11,9 +11,8 @@ The AgentField control plane orchestrates agent workflows, manages verifiable cr
 ## Quick Start
 
 ```bash
-# From the repository root
-go mod download
-npm --prefix web/client install
+# From the repository root this matches the Docker multi-stage build
+make control-plane
 
 # Run database migrations (requires AGENTFIELD_DATABASE_URL)
 goose -dir ./migrations postgres "$AGENTFIELD_DATABASE_URL" up
@@ -22,6 +21,12 @@ goose -dir ./migrations postgres "$AGENTFIELD_DATABASE_URL" up
 AGENTFIELD_DATABASE_URL=postgres://agentfield:agentfield@localhost:5432/agentfield?sslmode=disable \
 go run ./cmd/server
 ```
+
+### Embedded UI build automation
+
+`make control-plane` now executes `scripts/build-ui.sh` before `go build`, mirroring the Docker build stages.  
+The helper hashes the React sources (`src/`, `public/`, config files, etc.) and only runs `npm ci && npm run build` when something changed, so incremental Go builds stay quick.  
+For backend-only iteration, set `SKIP_UI_BUILD=1 make control-plane`, or invoke `scripts/build-ui.sh` manually when building outside of the Makefile.
 
 Visit `http://localhost:8080/ui/` to access the embedded admin UI.
 

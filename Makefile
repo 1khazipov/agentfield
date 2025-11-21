@@ -11,7 +11,7 @@ install:
 build: control-plane sdk-go sdk-python
 
 control-plane:
-	( cd control-plane && go build ./... )
+	( cd control-plane && ./scripts/build-ui.sh && go build ./... )
 
 sdk-go:
 	( cd sdk/go && go build ./... )
@@ -37,7 +37,7 @@ tidy:
 	( cd sdk/go && go mod tidy )
 
 clean:
-	rm -rf control-plane/bin control-plane/dist
+	rm -rf control-plane/bin control-plane/dist control-plane/web/client/dist control-plane/web/client/.ui-build-hash
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 
 # ============================================================================
