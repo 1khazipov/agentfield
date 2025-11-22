@@ -35,18 +35,28 @@ This test suite runs end-to-end functional tests in an isolated Docker environme
 
 ```
 tests/functional/
+├── agents/                           # Reusable agent definitions
+│   ├── __init__.py
+│   └── quick_start_agent.py
 ├── docker/
 │   ├── docker compose.local.yml      # SQLite mode (fast)
 │   ├── docker compose.postgres.yml   # PostgreSQL mode (production-like)
 │   ├── Dockerfile.test-runner        # Test execution container
 │   ├── agentfield-test.yaml          # Control plane configuration
 │   └── wait-for-services.sh          # Health check script
-├── conftest.py                        # Pytest fixtures
-├── test_hello_world.py                # Example functional test
+├── tests/
+│   ├── test_hello_world.py           # Hello World functional test
+│   └── test_quick_start.py           # README Quick Start validation
+├── utils/
+│   ├── __init__.py
+│   └── agent_server.py               # Shared run-agent helper
+├── conftest.py                       # Pytest fixtures
 ├── requirements.txt                   # Test dependencies
 ├── .env.example                       # Environment template
 └── README.md                          # This file
 ```
+
+The `agents/` directory stores normal-looking AgentField nodes (complete with `if __name__ == "__main__"` hooks) that tests can import and run. Shared helpers such as the `run_agent_server` async context manager live in `utils/` so every test can start/stop agents the same way.
 
 ### Test Flow
 
@@ -176,45 +186,38 @@ make test-functional-local
 
 ## 🧪 Writing Tests
 
+### Reusable Agent Nodes
+
+- Put canonical agent implementations in `agents/<name>_agent.py`. Each module should expose a `create_agent(openrouter_config, **kwargs)` helper (see `agents/quick_start_agent.py`).
+- Tests import those helpers, instantiate the agent (exactly like production code), and then spin it up with `utils.agent_server.run_agent_server`.
+- Agent modules can also be executed directly (`python -m agents.quick_start_agent`) because they expose a `create_agent_from_env` helper.
+
 ### Basic Structure
 
 ```python
 import pytest
-from agentfield import Agent
+from agents.my_agent import create_agent
+from utils.agent_server import run_agent_server
 
 @pytest.mark.functional
 @pytest.mark.openrouter
 @pytest.mark.asyncio
 async def test_my_feature(
-    make_test_agent,
-    openrouter_config,  # ALWAYS use this fixture - NEVER hardcode models
+    openrouter_config,
     async_http_client,
 ):
-    # Create agent with OpenRouter config (uses OPENROUTER_MODEL env var)
-    agent = make_test_agent(
-        node_id="my-test-agent",
-        ai_config=openrouter_config,  # This respects OPENROUTER_MODEL
-    )
-    
-    # Define reasoner
-    @agent.reasoner()
-    async def my_reasoner(input_data: str) -> dict:
-        response = await agent.ai(prompt=input_data)
-        return {"result": response}
-    
-    # Start agent and register
-    # ... (see test_hello_world.py for full example)
-    
-    # Execute through control plane
-    result = await async_http_client.post(
-        f"/api/v1/reasoners/{agent.node_id}.my_reasoner",
-        json={"input": {"input_data": "test"}}
-    )
-    
-    # Validate
-    assert result.status_code == 200
-    assert "result" in result.json()
+    agent = create_agent(openrouter_config, node_id="my-test-agent")
+
+    async with run_agent_server(agent):
+        response = await async_http_client.post(
+            f"/api/v1/reasoners/{agent.node_id}.my_reasoner",
+            json={"input": {"input_data": "test"}},
+        )
+        assert response.status_code == 200
+        assert "result" in response.json()
 ```
+
+> `make_test_agent` is still available for quick experiments, but we recommend capturing production-like agents under `agents/` so they can be reused across multiple tests or even run manually.
 
 ### Available Fixtures
 

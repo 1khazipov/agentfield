@@ -9,16 +9,11 @@ This test validates the end-to-end flow:
 5. Check execution metadata (workflow ID, execution ID, timing)
 """
 
-import asyncio
-import os
-import socket
-import threading
 from typing import Dict
 
-import httpx
 import pytest
-import uvicorn
-from agentfield import Agent
+
+from utils.agent_server import run_agent_server
 
 
 @pytest.mark.functional
@@ -27,7 +22,6 @@ from agentfield import Agent
 async def test_hello_world_with_openrouter(
     make_test_agent,
     openrouter_config,
-    control_plane_url,
     async_http_client,
 ):
     """
@@ -70,52 +64,10 @@ async def test_hello_world_with_openrouter(
             "answer": answer_text.strip(),
         }
     
-    # ========================================================================
-    # Step 3: Start agent server on a free port
-    # ========================================================================
-    # Find a free port
-    agent_bind_host = os.environ.get("TEST_AGENT_BIND_HOST", "127.0.0.1")
-    agent_callback_host = os.environ.get("TEST_AGENT_CALLBACK_HOST", "127.0.0.1")
-    
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((agent_bind_host, 0))
-        agent_port = s.getsockname()[1]
-    
-    agent.base_url = f"http://{agent_callback_host}:{agent_port}"
-    
-    # Configure and start uvicorn server
-    config = uvicorn.Config(
-        app=agent,
-        host=agent_bind_host,
-        port=agent_port,
-        log_level="error",
-        access_log=False,
-    )
-    server = uvicorn.Server(config)
-    loop = asyncio.new_event_loop()
-    
-    def run_server():
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(server.serve())
-    
-    thread = threading.Thread(target=run_server, daemon=True)
-    thread.start()
-    
-    # Wait for server to be ready
-    await asyncio.sleep(2)
-    
-    try:
+    async with run_agent_server(agent):
         # ====================================================================
-        # Step 4: Register agent with control plane
+        # Step 4: Verify registration via control plane
         # ====================================================================
-        await agent.agentfield_handler.register_with_agentfield_server(agent_port)
-        # Disable AgentField callback handshakes so reasoner responses remain synchronous
-        agent.agentfield_server = None
-        
-        # Wait for registration to propagate
-        await asyncio.sleep(2)
-        
-        # Verify registration by checking the nodes endpoint
         nodes_response = await async_http_client.get(f"/api/v1/nodes/{agent.node_id}")
         assert nodes_response.status_code == 200, f"Agent not found in registry: {nodes_response.text}"
         
@@ -198,15 +150,6 @@ async def test_hello_world_with_openrouter(
         print(f"  Execution ID: {headers.get('X-Execution-ID', headers.get('x-execution-id', 'N/A'))}")
         
         print("\n✅ All validations passed! End-to-end test successful.")
-        
-    finally:
-        # ====================================================================
-        # Cleanup: Stop agent server
-        # ====================================================================
-        server.should_exit = True
-        if loop.is_running():
-            loop.call_soon_threadsafe(lambda: None)
-        thread.join(timeout=10)
 
 
 @pytest.mark.functional
