@@ -28,6 +28,7 @@ node_modules/
 .yarn/
 .parcel-cache/
 *.tsbuildinfo
+**/.ui-build-hash
 
 # IDE / Tooling
 .idea/

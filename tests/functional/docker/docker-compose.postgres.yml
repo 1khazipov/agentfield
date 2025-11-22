@@ -1,0 +1,80 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: agentfield-postgres-test
+    environment:
+      POSTGRES_USER: agentfield
+      POSTGRES_PASSWORD: agentfield_test_pass
+      POSTGRES_DB: agentfield_test
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentfield -d agentfield_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - agentfield-test
+    ports:
+      - "5432:5432"
+
+  control-plane:
+    build:
+      context: ../../..
+      dockerfile: deployments/docker/Dockerfile.control-plane
+    container_name: agentfield-control-plane-postgres
+    environment:
+      AGENTFIELD_STORAGE_MODE: postgres
+      AGENTFIELD_POSTGRES_URL: postgres://agentfield:agentfield_test_pass@postgres:5432/agentfield_test?sslmode=disable
+      AGENTFIELD_STORAGE_POSTGRES_URL: postgres://agentfield:agentfield_test_pass@postgres:5432/agentfield_test?sslmode=disable
+      AGENTFIELD_DATABASE_URL: postgres://agentfield:agentfield_test_pass@postgres:5432/agentfield_test?sslmode=disable
+      AGENTFIELD_PORT: 8080
+      AGENTFIELD_CONFIG_FILE: /etc/agentfield/agentfield-test.yaml
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../docker/agentfield-test.yaml:/etc/agentfield/agentfield-test.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - agentfield-test
+    command: ["server", "--backend-only", "--port", "8080", "--config", "/etc/agentfield/agentfield-test.yaml", "--no-vc-execution"]
+
+  test-runner:
+    build:
+      context: ../../..
+      dockerfile: tests/functional/docker/Dockerfile.test-runner
+    container_name: agentfield-test-runner-postgres
+    environment:
+      AGENTFIELD_SERVER: http://control-plane:8080
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openrouter/google/gemini-2.5-flash-lite}
+      STORAGE_MODE: postgres
+      PYTEST_ARGS: ${PYTEST_ARGS:--v}
+      TEST_TIMEOUT: ${TEST_TIMEOUT:-300}
+      TEST_AGENT_BIND_HOST: ${TEST_AGENT_BIND_HOST:-0.0.0.0}
+      TEST_AGENT_CALLBACK_HOST: ${TEST_AGENT_CALLBACK_HOST:-test-runner}
+    volumes:
+      - ../:/tests
+      - test-reports:/reports
+    depends_on:
+      - control-plane
+    networks:
+      - agentfield-test
+    working_dir: /tests
+    command: >
+      sh -c "
+      echo 'Waiting for control plane to be fully ready...' &&
+      wait-for-services.sh &&
+      pytest $$PYTEST_ARGS --junit-xml=/reports/junit-postgres.xml --tb=short
+      "
+
+networks:
+  agentfield-test:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  test-reports:

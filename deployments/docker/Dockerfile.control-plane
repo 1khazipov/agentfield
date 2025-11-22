@@ -32,8 +32,13 @@ RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/g
     if [ "${TARGETARCH}" = "arm64" ]; then export CC=aarch64-linux-gnu-gcc; else export CC=gcc; fi && \
     GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -tags "embedded sqlite_fts5" -o /app/bin/agentfield-server ./cmd/agentfield-server
 
+# Pre-create writable data directory for distroless runtime. The nonroot user
+# has UID/GID 65532 in the base image, so match that here.
+RUN mkdir -p /tmp/agentfield-data && chown 65532:65532 /tmp/agentfield-data
+
 FROM gcr.io/distroless/base-debian12
 COPY --from=go-builder /app/bin/agentfield-server /usr/local/bin/agentfield-server
 COPY --from=go-builder /app/control-plane/config /etc/agentfield/config
+COPY --from=go-builder --chown=nonroot:nonroot /tmp/agentfield-data /data
 USER nonroot:nonroot
 ENTRYPOINT ["/usr/local/bin/agentfield-server"]

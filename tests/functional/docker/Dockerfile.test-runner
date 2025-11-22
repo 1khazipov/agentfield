@@ -1,0 +1,46 @@
+FROM python:3.11-slim
+
+# Prevent Python from writing pyc files and buffering stdout/stderr
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    wget \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy and install AgentField Python SDK
+COPY sdk/python /tmp/agentfield-sdk
+RUN pip install --no-cache-dir /tmp/agentfield-sdk && \
+    rm -rf /tmp/agentfield-sdk
+
+# Copy test requirements and install
+COPY tests/functional/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt && \
+    rm /tmp/requirements.txt
+
+# Copy wait script
+COPY tests/functional/docker/wait-for-services.sh /usr/local/bin/wait-for-services.sh
+RUN chmod +x /usr/local/bin/wait-for-services.sh
+
+# Create non-root user for security
+RUN groupadd -r testuser && useradd -r -g testuser testuser
+
+# Create directories for test artifacts
+RUN mkdir -p /reports /tests && \
+    chown -R testuser:testuser /reports /tests
+
+# Switch to non-root user
+USER testuser
+
+WORKDIR /tests
+
+# Default command (will be overridden by docker-compose)
+CMD ["pytest", "-v"]
+

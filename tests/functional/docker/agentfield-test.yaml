@@ -1,0 +1,90 @@
+agentfield:
+  port: 8080
+  mode: "local"
+  max_concurrent_requests: 512
+  request_timeout: 180s
+  circuit_breaker_threshold: 10
+  execution_cleanup:
+    enabled: true
+    retention_period: 24h
+    cleanup_interval: 1h
+    batch_size: 100
+    preserve_recent_duration: 30m
+  execution_queue:
+    worker_count: 16
+    request_timeout: 180s
+    agent_call_timeout: 90s
+    lease_duration: 180s
+    max_attempts: 3
+    failure_backoff: 500ms
+    max_failure_backoff: 30s
+    poll_interval: 100ms
+    result_preview_bytes: 4096
+    queue_soft_limit: 10000
+    waiter_map_limit: 2000
+    webhook_timeout: 10s
+    webhook_max_attempts: 3
+    webhook_retry_backoff: 1s
+    webhook_max_retry_backoff: 5s
+
+ui:
+  enabled: false
+  mode: "embedded"
+
+api:
+  cors:
+    allowed_origins:
+      - "*"
+    allowed_methods:
+      - "GET"
+      - "POST"
+      - "PUT"
+      - "DELETE"
+      - "OPTIONS"
+    allowed_headers:
+      - "Origin"
+      - "Content-Type"
+      - "Accept"
+      - "Authorization"
+      - "X-Requested-With"
+    exposed_headers:
+      - "Content-Length"
+      - "X-Total-Count"
+      - "X-Workflow-ID"
+      - "X-Execution-ID"
+    allow_credentials: true
+
+storage:
+  mode: "local"
+  local:
+    database_path: "/data/agentfield.db"
+    kv_store_path: "/data/agentfield.bolt"
+    cache_size: 500
+    retention_days: 7
+    auto_vacuum: true
+  postgres:
+    host: "postgres"
+    port: 5432
+    database: "agentfield_test"
+    user: "agentfield"
+    password: "agentfield_test_pass"
+    sslmode: "disable"
+    max_connections: 25
+    connection_timeout: 30s
+  vector:
+    enabled: false
+    distance: "cosine"
+
+features:
+  did:
+    enabled: false
+
+agents:
+  discovery:
+    scan_interval: "30s"
+    health_check_interval: "10s"
+  scaling:
+    auto_scale: false
+    min_replicas: 1
+    max_replicas: 5
+
