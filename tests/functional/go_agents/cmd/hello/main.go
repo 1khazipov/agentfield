@@ -21,7 +21,6 @@ func main() {
 	if listenAddr == "" {
 		listenAddr = ":8001"
 	}
-
 	publicURL := strings.TrimSpace(os.Getenv("AGENT_PUBLIC_URL"))
 	if publicURL == "" {
 		publicURL = "http://localhost" + listenAddr
@@ -30,13 +29,13 @@ func main() {
 	cfg := agent.Config{
 		NodeID:        nodeID,
 		Version:       "1.0.0",
-		AgentFieldURL: agentFieldURL, // optional for CLI-only
+		AgentFieldURL: agentFieldURL,
 		Token:         os.Getenv("AGENTFIELD_TOKEN"),
 		ListenAddress: listenAddr,
 		PublicURL:     publicURL,
 		CLIConfig: &agent.CLIConfig{
 			AppName:        "go-agent-hello",
-			AppDescription: "Go SDK hello-world with CLI + control plane",
+			AppDescription: "Functional test agent for Go SDK CLI + control plane flows",
 			HelpPreamble:   "Pass --set message=YourName to customize the greeting.",
 			EnvironmentVars: []string{
 				"AGENTFIELD_URL (optional) Control plane URL for server mode",
@@ -46,7 +45,7 @@ func main() {
 		},
 	}
 
-	hello, err := agent.New(cfg)
+	ag, err := agent.New(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -64,14 +63,14 @@ func main() {
 		}
 	}
 
-	hello.RegisterReasoner("add_emoji", func(ctx context.Context, input map[string]any) (any, error) {
+	ag.RegisterReasoner("add_emoji", func(ctx context.Context, input map[string]any) (any, error) {
 		msg := fmt.Sprintf("%v", input["message"])
 		return addEmojiLocal(msg), nil
 	},
 		agent.WithDescription("Adds a friendly emoji to a message"),
 	)
 
-	hello.RegisterReasoner("say_hello", func(ctx context.Context, input map[string]any) (any, error) {
+	ag.RegisterReasoner("say_hello", func(ctx context.Context, input map[string]any) (any, error) {
 		name := strings.TrimSpace(fmt.Sprintf("%v", input["name"]))
 		if name == "" || name == "<nil>" {
 			name = "World"
@@ -80,8 +79,7 @@ func main() {
 
 		var decorated map[string]any
 		if hasControlPlane {
-			// Prefer control plane call so workflow edges are captured.
-			res, callErr := hello.Call(ctx, "add_emoji", map[string]any{"message": greeting})
+			res, callErr := ag.Call(ctx, "add_emoji", map[string]any{"message": greeting})
 			if callErr == nil {
 				decorated = res
 			} else {
@@ -101,25 +99,25 @@ func main() {
 		agent.WithDescription("Greets a user, enriching the message via add_emoji"),
 	)
 
-	hello.RegisterReasoner("demo_echo", func(ctx context.Context, input map[string]any) (any, error) {
+	ag.RegisterReasoner("demo_echo", func(ctx context.Context, input map[string]any) (any, error) {
 		message := strings.TrimSpace(fmt.Sprintf("%v", input["message"]))
 		if message == "" || message == "<nil>" {
 			message = "Agentfield"
 		}
 
 		if hasControlPlane {
-			res, callErr := hello.Call(ctx, "say_hello", map[string]any{"name": message})
+			res, callErr := ag.Call(ctx, "say_hello", map[string]any{"name": message})
 			if callErr == nil {
 				return res, nil
 			}
 			log.Printf("warn: control plane call to say_hello failed: %v", callErr)
 		}
 
-		return hello.Execute(ctx, "say_hello", map[string]any{"name": message})
+		return ag.Execute(ctx, "say_hello", map[string]any{"name": message})
 	},
 		agent.WithCLI(),
 		agent.WithDefaultCLI(),
-		agent.WithDescription("Echo entry point that chains into say_hello -> add_emoji"),
+		agent.WithDescription("Echo entry point chaining say_hello -> add_emoji"),
 		agent.WithCLIFormatter(func(ctx context.Context, result any, err error) {
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -133,7 +131,7 @@ func main() {
 		}),
 	)
 
-	if err := hello.Run(context.Background()); err != nil {
+	if err := ag.Run(context.Background()); err != nil {
 		if cliErr, ok := err.(*agent.CLIError); ok {
 			os.Exit(cliErr.ExitCode())
 		}

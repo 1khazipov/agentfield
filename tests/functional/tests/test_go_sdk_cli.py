@@ -1,0 +1,151 @@
+import asyncio
+import json
+import os
+import time
+
+import httpx
+import pytest
+
+from utils import get_go_agent_binary, run_go_agent, unique_node_id
+
+
+async def _wait_for_registration(client, node_id: str, timeout: float = 30.0):
+    deadline = time.time() + timeout
+    last_status = None
+    while time.time() < deadline:
+        resp = await client.get(f"/api/v1/nodes/{node_id}")
+        last_status = resp.status_code
+        if resp.status_code == 200:
+            return
+        await asyncio.sleep(1)
+    raise AssertionError(f"Node {node_id} not registered after {timeout}s (last status={last_status})")
+
+
+async def _wait_for_workflow_run(client, run_id: str, *, expected_reasoners: set[str], timeout: float = 45.0):
+    """Poll workflow run detail endpoint until expected reasoners appear."""
+    deadline = time.time() + timeout
+    last_body = None
+    while time.time() < deadline:
+        identifiers = [run_id]
+        if run_id.startswith("run_"):
+            identifiers.append("wf_" + run_id[len("run_") :])
+        for identifier in identifiers:
+            resp = await client.get(f"/api/ui/v2/workflow-runs/{identifier}")
+            if resp.status_code == 200:
+                body = resp.json()
+                last_body = body
+                executions = body.get("executions", [])
+                reasoners = {node.get("reasoner_id") for node in executions}
+                if expected_reasoners.issubset(reasoners):
+                    return executions
+        await asyncio.sleep(1)
+    raise AssertionError(
+        f"Workflow run {run_id} missing expected nodes after {timeout}s: {json.dumps(last_body, indent=2)}"
+    )
+
+
+async def _wait_for_agent_health(url: str, timeout: float = 20.0):
+    deadline = time.time() + timeout
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        while time.time() < deadline:
+            try:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    return
+            except httpx.HTTPError:
+                pass
+            await asyncio.sleep(0.5)
+    raise AssertionError(f"Agent did not become healthy at {url}")
+
+
+async def _resolve_workflow_id_from_execution(client, execution_id: str, timeout: float = 15.0) -> str:
+    """Query execution status API to retrieve canonical workflow/run ID."""
+    deadline = time.time() + timeout
+    last_status = None
+    while time.time() < deadline:
+        resp = await client.get(f"/api/v1/executions/{execution_id}")
+        last_status = resp.status_code
+        if resp.status_code == 200:
+            data = resp.json()
+            workflow_id = data.get("workflow_id") or data.get("run_id") or data.get("runId")
+            if workflow_id:
+                return workflow_id
+        await asyncio.sleep(0.5)
+    raise AssertionError(
+        f"Unable to resolve workflow id from execution {execution_id}, last status={last_status}"
+    )
+
+
+@pytest.mark.functional
+@pytest.mark.asyncio
+async def test_go_sdk_cli_and_control_plane(async_http_client, control_plane_url):
+    """
+    Verify Go SDK hello-world example works as both CLI and control-plane node:
+    - CLI invocation prints greeting without control-plane dependency.
+    - Server mode registers and executes via control plane, producing parent/child workflow edges.
+    """
+    node_id = unique_node_id("go-hello-agent")
+
+    binary = None
+    try:
+        binary = get_go_agent_binary("hello")
+    except FileNotFoundError:
+        pytest.skip("Go agent binary not built; ensure go_agents are compiled in test image")
+
+    # Start Go agent server pointed at control plane.
+    env_server = {
+        **os.environ,
+        "AGENTFIELD_URL": control_plane_url,
+        "AGENT_NODE_ID": node_id,
+        "AGENT_LISTEN_ADDR": ":8001",
+        # Control plane reaches the agent via docker network name.
+        "AGENT_PUBLIC_URL": "http://test-runner:8001",
+    }
+    async with run_go_agent("hello", args=["serve"], env=env_server) as proc:
+        await _wait_for_registration(async_http_client, node_id)
+        await _wait_for_agent_health("http://127.0.0.1:8001/health")
+
+        # Execute via control plane to build a workflow DAG: demo_echo -> say_hello -> add_emoji.
+        payload = {"input": {"message": "Hello, Agentfield!"}}
+        resp = await async_http_client.post(
+            f"/api/v1/execute/{node_id}.demo_echo", json=payload, timeout=30.0
+        )
+        assert resp.status_code == 200, f"execute failed: {resp.status_code} {resp.text}"
+
+        body = resp.json()
+        execution_id = body.get("execution_id")
+        assert execution_id, f"execution_id missing in response: {body}"
+
+        workflow_id = await _resolve_workflow_id_from_execution(async_http_client, execution_id)
+        # Validate result shape
+        result = body.get("result") or {}
+        assert result.get("name") == "Hello, Agentfield!"
+        assert "greeting" in result
+
+        timeline = await _wait_for_workflow_run(
+            async_http_client,
+            workflow_id,
+            expected_reasoners={"demo_echo", "say_hello", "add_emoji"},
+            timeout=30.0,
+        )
+        id_by_reasoner = {node["reasoner_id"]: node["execution_id"] for node in timeline}
+        parent_by_reasoner = {node["reasoner_id"]: node.get("parent_execution_id") for node in timeline}
+
+        assert parent_by_reasoner.get("demo_echo") in (None, "", "null")
+        assert parent_by_reasoner.get("say_hello") == id_by_reasoner["demo_echo"]
+        assert parent_by_reasoner.get("add_emoji") == id_by_reasoner["say_hello"]
+
+        # CLI invocation should still work without control plane.
+        env_cli = {k: v for k, v in os.environ.items() if k not in {"AGENTFIELD_URL", "AGENT_PUBLIC_URL"}}
+        env_cli["AGENT_NODE_ID"] = f"{node_id}-cli"
+        cli_proc = await asyncio.create_subprocess_exec(
+            binary,
+            "--set",
+            "message=CLI Functional",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env_cli,
+        )
+        stdout, stderr = await cli_proc.communicate()
+        assert cli_proc.returncode == 0, f"CLI failed rc={cli_proc.returncode} stderr={stderr.decode()}"
+        assert "Hello, CLI Functional" in stdout.decode()

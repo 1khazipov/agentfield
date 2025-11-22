@@ -25,6 +25,18 @@ RUN mkdir -p /build/bin && \
     cd control-plane && \
     go build -tags "embedded sqlite_fts5" -o /build/bin/af ./cmd/af
 
+# Build Go functional agent binaries
+COPY sdk/go ./sdk/go
+COPY tests/functional/go_agents ./tests/functional/go_agents
+RUN cd tests/functional/go_agents && \
+    go mod tidy && \
+    for dir in cmd/*; do \
+        if [ -d "$dir" ]; then \
+            name=$(basename "$dir"); \
+            go build -o /build/bin/go-agent-$name "./cmd/$name"; \
+        fi; \
+    done
+
 FROM python:3.11-slim
 
 # Prevent Python from writing pyc files and buffering stdout/stderr
@@ -59,6 +71,9 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt && \
 # Copy wait script
 COPY tests/functional/docker/wait-for-services.sh /usr/local/bin/wait-for-services.sh
 RUN chmod +x /usr/local/bin/wait-for-services.sh
+
+# Copy Go agent binaries
+COPY --from=af-cli-builder /build/bin/go-agent-* /usr/local/bin/
 
 # Create non-root user for security
 RUN groupadd -r testuser && useradd -r -g testuser testuser
