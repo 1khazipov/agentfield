@@ -67,6 +67,8 @@ async def test_memory_event_listener_captures_session_updates(async_http_client)
 @pytest.mark.functional
 @pytest.mark.asyncio
 async def test_memory_event_history_matches_live_events(async_http_client):
+    import asyncio
+
     agent = create_memory_events_agent(
         node_id=unique_node_id(MEMORY_EVENTS_SPEC.default_node_id)
     )
@@ -92,16 +94,26 @@ async def test_memory_event_history_matches_live_events(async_http_client):
             async_http_client, clear_endpoint, {"user_id": user_id}
         )
 
-        history = await _invoke_reasoner(
-            async_http_client, history_endpoint, {"limit": 10}
+        # Retry logic to allow event persistence with increased limit
+        relevant_events = []
+        for attempt in range(10):
+            history = await _invoke_reasoner(
+                async_http_client, history_endpoint, {"limit": 50}
+            )
+            relevant_events = [
+                evt
+                for evt in history["history"]
+                if evt["scope_id"] == session_id
+                and evt["key"] == "preferences.favorite_color"
+            ]
+            if len(relevant_events) >= 2:
+                break
+            await asyncio.sleep(0.5)
+
+        assert len(relevant_events) >= 2, (
+            f"Expected at least 2 events for session {session_id}, "
+            f"got {len(relevant_events)}. All events: {history.get('history', [])}"
         )
-        relevant_events = [
-            evt
-            for evt in history["history"]
-            if evt["scope_id"] == session_id
-            and evt["key"] == "preferences.favorite_color"
-        ]
-        assert len(relevant_events) >= 2
 
         set_event = next(
             evt for evt in relevant_events if evt["action"] == "set"

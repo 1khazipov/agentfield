@@ -42,7 +42,7 @@ services:
         condition: service_healthy
     networks:
       - agentfield-test
-    command: ["server", "--backend-only", "--port", "8080", "--config", "/etc/agentfield/agentfield-test.yaml", "--vc-execution"]
+    command: ["server", "--port", "8080", "--config", "/etc/agentfield/agentfield-test.yaml", "--vc-execution"]
 
   test-runner:
     build:

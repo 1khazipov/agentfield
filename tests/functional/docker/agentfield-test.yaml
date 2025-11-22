@@ -28,7 +28,7 @@ agentfield:
     webhook_max_retry_backoff: 5s
 
 ui:
-  enabled: false
+  enabled: true
   mode: "embedded"
 
 api:

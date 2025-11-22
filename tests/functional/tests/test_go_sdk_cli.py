@@ -23,21 +23,20 @@ async def _wait_for_registration(client, node_id: str, timeout: float = 30.0):
 
 async def _wait_for_workflow_run(client, run_id: str, *, expected_reasoners: set[str], timeout: float = 45.0):
     """Poll workflow run detail endpoint until expected reasoners appear."""
+    # Give the database a moment to commit the executions
+    await asyncio.sleep(0.5)
+
     deadline = time.time() + timeout
     last_body = None
     while time.time() < deadline:
-        identifiers = [run_id]
-        if run_id.startswith("run_"):
-            identifiers.append("wf_" + run_id[len("run_") :])
-        for identifier in identifiers:
-            resp = await client.get(f"/api/ui/v2/workflow-runs/{identifier}")
-            if resp.status_code == 200:
-                body = resp.json()
-                last_body = body
-                executions = body.get("executions", [])
-                reasoners = {node.get("reasoner_id") for node in executions}
-                if expected_reasoners.issubset(reasoners):
-                    return executions
+        resp = await client.get(f"/api/ui/v2/workflow-runs/{run_id}")
+        if resp.status_code == 200:
+            body = resp.json()
+            last_body = body
+            executions = body.get("executions", [])
+            reasoners = {node.get("reasoner_id") for node in executions}
+            if expected_reasoners.issubset(reasoners):
+                return executions
         await asyncio.sleep(1)
     raise AssertionError(
         f"Workflow run {run_id} missing expected nodes after {timeout}s: {json.dumps(last_body, indent=2)}"
