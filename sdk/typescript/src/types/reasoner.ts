@@ -16,4 +16,5 @@ export interface ReasonerOptions {
   inputSchema?: any;
   outputSchema?: any;
   trackWorkflow?: boolean;
+  memoryConfig?: any;
 }

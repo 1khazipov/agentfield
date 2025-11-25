@@ -11,14 +11,8 @@ export class AgentFieldClient {
     this.config = config;
   }
 
-  async register(reasoners: string[], skills: string[]) {
-    await this.http.post('/api/v1/nodes/register', {
-      nodeId: this.config.nodeId,
-      version: this.config.version,
-      reasoners,
-      skills,
-      publicUrl: this.config.publicUrl
-    });
+  async register(payload: any) {
+    await this.http.post('/api/v1/nodes/register', payload);
   }
 
   async heartbeat(): Promise<HealthStatus> {

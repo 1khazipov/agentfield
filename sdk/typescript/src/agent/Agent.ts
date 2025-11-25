@@ -278,10 +278,39 @@ export class Agent {
 
   private async registerWithControlPlane() {
     try {
-      await this.agentFieldClient.register(
-        this.reasoners.all().map((r) => r.name),
-        this.skills.all().map((s) => s.name)
-      );
+      const reasoners = this.reasoners.all().map((r) => ({
+        id: r.name,
+        input_schema: r.options?.inputSchema ?? {},
+        output_schema: r.options?.outputSchema ?? {},
+        memory_config: r.options?.memoryConfig ?? {
+          auto_inject: [],
+          memory_retention: '',
+          cache_results: false
+        },
+        tags: r.options?.tags ?? []
+      }));
+
+      const skills = this.skills.all().map((s) => ({
+        id: s.name,
+        input_schema: s.options?.inputSchema ?? {},
+        tags: s.options?.tags ?? []
+      }));
+
+      const port = this.config.port ?? 8001;
+      const hostForUrl = this.config.publicUrl
+        ? undefined
+        : (this.config.host && this.config.host !== '0.0.0.0' ? this.config.host : '127.0.0.1');
+      const publicUrl =
+        this.config.publicUrl ?? `http://${hostForUrl ?? '127.0.0.1'}:${port}`;
+
+      await this.agentFieldClient.register({
+        nodeId: this.config.nodeId,
+        version: this.config.version,
+        reasoners,
+        skills,
+        baseUrl: publicUrl,
+        publicUrl
+      });
     } catch (err) {
       if (!this.config.devMode) {
         throw err;
