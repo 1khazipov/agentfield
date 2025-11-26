@@ -116,6 +116,7 @@ type executionController struct {
 	payloads   services.PayloadStore
 	webhooks   services.WebhookDispatcher
 	eventBus   *events.ExecutionEventBus
+	timeout    time.Duration
 }
 
 type asyncExecutionJob struct {
@@ -151,44 +152,49 @@ const (
 )
 
 // ExecuteHandler handles synchronous execution requests.
-func ExecuteHandler(store ExecutionStore, payloads services.PayloadStore, webhooks services.WebhookDispatcher) gin.HandlerFunc {
-	controller := newExecutionController(store, payloads, webhooks)
+func ExecuteHandler(store ExecutionStore, payloads services.PayloadStore, webhooks services.WebhookDispatcher, timeout time.Duration) gin.HandlerFunc {
+	controller := newExecutionController(store, payloads, webhooks, timeout)
 	return controller.handleSync
 }
 
 // ExecuteAsyncHandler handles asynchronous execution requests.
-func ExecuteAsyncHandler(store ExecutionStore, payloads services.PayloadStore, webhooks services.WebhookDispatcher) gin.HandlerFunc {
-	controller := newExecutionController(store, payloads, webhooks)
+func ExecuteAsyncHandler(store ExecutionStore, payloads services.PayloadStore, webhooks services.WebhookDispatcher, timeout time.Duration) gin.HandlerFunc {
+	controller := newExecutionController(store, payloads, webhooks, timeout)
 	return controller.handleAsync
 }
 
 // GetExecutionStatusHandler resolves a single execution record.
 func GetExecutionStatusHandler(store ExecutionStore) gin.HandlerFunc {
-	controller := newExecutionController(store, nil, nil)
+	controller := newExecutionController(store, nil, nil, 0)
 	return controller.handleStatus
 }
 
 // BatchExecutionStatusHandler resolves multiple execution records.
 func BatchExecutionStatusHandler(store ExecutionStore) gin.HandlerFunc {
-	controller := newExecutionController(store, nil, nil)
+	controller := newExecutionController(store, nil, nil, 0)
 	return controller.handleBatchStatus
 }
 
 // UpdateExecutionStatusHandler ingests status callbacks from agent nodes.
-func UpdateExecutionStatusHandler(store ExecutionStore, payloads services.PayloadStore, webhooks services.WebhookDispatcher) gin.HandlerFunc {
-	controller := newExecutionController(store, payloads, webhooks)
+func UpdateExecutionStatusHandler(store ExecutionStore, payloads services.PayloadStore, webhooks services.WebhookDispatcher, timeout time.Duration) gin.HandlerFunc {
+	controller := newExecutionController(store, payloads, webhooks, timeout)
 	return controller.handleStatusUpdate
 }
 
-func newExecutionController(store ExecutionStore, payloads services.PayloadStore, webhooks services.WebhookDispatcher) *executionController {
+func newExecutionController(store ExecutionStore, payloads services.PayloadStore, webhooks services.WebhookDispatcher, timeout time.Duration) *executionController {
+	// Use default timeout if not provided (0 or negative)
+	if timeout <= 0 {
+		timeout = 90 * time.Second
+	}
 	return &executionController{
 		store: store,
 		httpClient: &http.Client{
-			Timeout: 90 * time.Second,
+			Timeout: timeout,
 		},
 		payloads: payloads,
 		webhooks: webhooks,
 		eventBus: store.GetExecutionEventBus(),
+		timeout:  timeout,
 	}
 }
 
@@ -211,8 +217,8 @@ func (c *executionController) handleSync(ctx *gin.Context) {
 			Msg("agent returned async acknowledgment, waiting for completion")
 
 		// Wait for agent to call back and complete the execution
-		// Use 90 second timeout to match the HTTP client timeout
-		exec, waitErr := c.waitForExecutionCompletion(reqCtx, plan.exec.ExecutionID, 90*time.Second)
+		// Use configured timeout to match the HTTP client timeout
+		exec, waitErr := c.waitForExecutionCompletion(reqCtx, plan.exec.ExecutionID, c.timeout)
 		if waitErr != nil {
 			logger.Logger.Error().
 				Err(waitErr).

@@ -11,7 +11,7 @@ import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from .async_config import AsyncConfig
 from .execution_state import ExecutionState
@@ -312,7 +312,7 @@ class ResultCache:
                 execution_state.execution_id, execution_state.result
             )
 
-    def get_keys(self, pattern: Optional[str] = None) -> list[str]:
+    def get_keys(self, pattern: Optional[str] = None) -> List[str]:
         """
         Get all cache keys, optionally filtered by pattern.
 

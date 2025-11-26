@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Set
+from typing import Optional, Set, Tuple
 
-CANONICAL_STATUSES: tuple[str, ...] = (
+CANONICAL_STATUSES: Tuple[str, ...] = (
     "pending",
     "queued",
     "running",
@@ -39,7 +39,7 @@ _STATUS_ALIASES = {
 TERMINAL_STATUSES: Set[str] = {"succeeded", "failed", "cancelled", "timeout"}
 
 
-def normalize_status(status: str | None) -> str:
+def normalize_status(status: Optional[str]) -> str:
     """Return the canonical representation of a status string."""
 
     if status is None:
@@ -55,7 +55,7 @@ def normalize_status(status: str | None) -> str:
     return _STATUS_ALIASES.get(normalized, "unknown")
 
 
-def is_terminal(status: str | None) -> bool:
+def is_terminal(status: Optional[str]) -> bool:
     """Return True if the provided status represents a terminal state."""
 
     return normalize_status(status) in TERMINAL_STATUSES

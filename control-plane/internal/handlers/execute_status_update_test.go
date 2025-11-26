@@ -43,7 +43,7 @@ func TestUpdateExecutionStatusHandler_Success(t *testing.T) {
 	require.NoError(t, store.CreateExecutionRecord(context.Background(), execution))
 
 	router := gin.New()
-	router.PUT("/api/v1/executions/:execution_id/status", UpdateExecutionStatusHandler(store, payloads, nil))
+	router.PUT("/api/v1/executions/:execution_id/status", UpdateExecutionStatusHandler(store, payloads, nil, 90*time.Second))
 
 	reqBody := `{
 		"status": "succeeded",
@@ -98,7 +98,7 @@ func TestUpdateExecutionStatusHandler_Failed(t *testing.T) {
 	require.NoError(t, store.CreateExecutionRecord(context.Background(), execution))
 
 	router := gin.New()
-	router.PUT("/api/v1/executions/:execution_id/status", UpdateExecutionStatusHandler(store, payloads, nil))
+	router.PUT("/api/v1/executions/:execution_id/status", UpdateExecutionStatusHandler(store, payloads, nil, 90*time.Second))
 
 	reqBody := `{
 		"status": "failed",
@@ -170,7 +170,7 @@ func TestUpdateExecutionStatusHandler_WithWebhook(t *testing.T) {
 	require.NoError(t, store.RegisterExecutionWebhook(context.Background(), webhook))
 
 	router := gin.New()
-	router.PUT("/api/v1/executions/:execution_id/status", UpdateExecutionStatusHandler(store, payloads, mockWebhook))
+	router.PUT("/api/v1/executions/:execution_id/status", UpdateExecutionStatusHandler(store, payloads, mockWebhook, 90*time.Second))
 
 	reqBody := `{
 		"status": "succeeded",
@@ -193,7 +193,7 @@ func TestUpdateExecutionStatusHandler_InvalidStatus(t *testing.T) {
 	payloads := services.NewFilePayloadStore(t.TempDir())
 
 	router := gin.New()
-	router.PUT("/api/v1/executions/:execution_id/status", UpdateExecutionStatusHandler(store, payloads, nil))
+	router.PUT("/api/v1/executions/:execution_id/status", UpdateExecutionStatusHandler(store, payloads, nil, 90*time.Second))
 
 	reqBody := `{
 		"status": "invalid-status"
@@ -218,7 +218,7 @@ func TestUpdateExecutionStatusHandler_MissingExecutionID(t *testing.T) {
 	payloads := services.NewFilePayloadStore(t.TempDir())
 
 	router := gin.New()
-	router.PUT("/api/v1/executions/:execution_id/status", UpdateExecutionStatusHandler(store, payloads, nil))
+	router.PUT("/api/v1/executions/:execution_id/status", UpdateExecutionStatusHandler(store, payloads, nil, 90*time.Second))
 
 	reqBody := `{
 		"status": "succeeded"
@@ -239,7 +239,7 @@ func TestUpdateExecutionStatusHandler_NotFound(t *testing.T) {
 	payloads := services.NewFilePayloadStore(t.TempDir())
 
 	router := gin.New()
-	router.PUT("/api/v1/executions/:execution_id/status", UpdateExecutionStatusHandler(store, payloads, nil))
+	router.PUT("/api/v1/executions/:execution_id/status", UpdateExecutionStatusHandler(store, payloads, nil, 90*time.Second))
 
 	reqBody := `{
 		"status": "succeeded"
@@ -283,7 +283,7 @@ func TestUpdateExecutionStatusHandler_ProgressUpdate(t *testing.T) {
 	require.NoError(t, store.CreateExecutionRecord(context.Background(), execution))
 
 	router := gin.New()
-	router.PUT("/api/v1/executions/:execution_id/status", UpdateExecutionStatusHandler(store, payloads, nil))
+	router.PUT("/api/v1/executions/:execution_id/status", UpdateExecutionStatusHandler(store, payloads, nil, 90*time.Second))
 
 	reqBody := `{
 		"status": "running",
@@ -307,7 +307,7 @@ func TestUpdateExecutionStatusHandler_ProgressUpdate(t *testing.T) {
 
 func TestWaitForExecutionCompletion_Success(t *testing.T) {
 	store := newTestExecutionStorage(nil)
-	controller := newExecutionController(store, nil, nil)
+	controller := newExecutionController(store, nil, nil, 90*time.Second)
 
 	execution := &types.Execution{
 		ExecutionID: "exec-1",
@@ -375,7 +375,7 @@ func TestWaitForExecutionCompletion_Success(t *testing.T) {
 
 func TestWaitForExecutionCompletion_Timeout(t *testing.T) {
 	store := newTestExecutionStorage(nil)
-	controller := newExecutionController(store, nil, nil)
+	controller := newExecutionController(store, nil, nil, 90*time.Second)
 
 	execution := &types.Execution{
 		ExecutionID: "exec-1",
@@ -399,7 +399,7 @@ func TestWaitForExecutionCompletion_Timeout(t *testing.T) {
 
 func TestWaitForExecutionCompletion_ContextCancellation(t *testing.T) {
 	store := newTestExecutionStorage(nil)
-	controller := newExecutionController(store, nil, nil)
+	controller := newExecutionController(store, nil, nil, 90*time.Second)
 
 	execution := &types.Execution{
 		ExecutionID: "exec-1",
@@ -439,7 +439,7 @@ func TestWaitForExecutionCompletion_ContextCancellation(t *testing.T) {
 func TestWaitForExecutionCompletion_NoEventBus(t *testing.T) {
 	// Create storage without event bus
 	store := &testExecutionStorageWithoutEventBus{}
-	controller := newExecutionController(store, nil, nil)
+	controller := newExecutionController(store, nil, nil, 90*time.Second)
 
 	ctx := context.Background()
 	result, err := controller.waitForExecutionCompletion(ctx, "exec-1", 1*time.Second)

@@ -28,6 +28,16 @@ from .execution_context import generate_run_id
 httpx = None  # type: ignore
 
 
+# Python 3.8 compatibility: asyncio.to_thread was added in Python 3.9
+if sys.version_info >= (3, 9):
+    from asyncio import to_thread as _to_thread
+else:
+    async def _to_thread(func, *args, **kwargs):
+        """Compatibility shim for asyncio.to_thread on Python 3.8."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
+
+
 def _ensure_httpx(force_reload: bool = False):
     """Load httpx lazily, allowing tests to monkeypatch the module."""
     global httpx
@@ -341,7 +351,7 @@ class AgentFieldClient:
         try:
             client = await self.get_async_http_client()
         except RuntimeError:
-            return await asyncio.to_thread(self._sync_request, method, url, **kwargs)
+            return await _to_thread(self._sync_request, method, url, **kwargs)
 
         return await client.request(method, url, **kwargs)
 

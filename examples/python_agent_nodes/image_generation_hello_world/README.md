@@ -379,6 +379,6 @@ DALL-E has rate limits. If you hit them:
 
 ## Learn More
 
-- [AgentField Documentation](https://docs.agentfield.ai)
+- [AgentField Documentation](https://agentfield.ai/docs)
 - [DALL-E API Reference](https://platform.openai.com/docs/guides/images)
 - [LiteLLM Documentation](https://docs.litellm.ai)

@@ -16,6 +16,7 @@ from typing import (
     Callable,
     List,
     Optional,
+    Set,
     Union,
     get_type_hints,
     Type,
@@ -238,7 +239,7 @@ def _build_callback_candidates(
     """Assemble a prioritized list of callback URL candidates."""
 
     candidates: List[str] = []
-    seen: set[str] = set()
+    seen: Set[str] = set()
 
     def add_candidate(raw: Optional[str]):
         normalized = _normalize_candidate(raw or "", port)

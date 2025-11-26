@@ -303,9 +303,9 @@ func TestVCService_GenerateExecutionVC_VCNotRequired(t *testing.T) {
 		Timestamp:   time.Now(),
 	}
 
-	_, err := vcService.GenerateExecutionVC(execCtx, []byte(`{}`), []byte(`{}`), "succeeded", nil, 100)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "execution VC generation disabled")
+	vc, err := vcService.GenerateExecutionVC(execCtx, []byte(`{}`), []byte(`{}`), "succeeded", nil, 100)
+	require.NoError(t, err)
+	require.Nil(t, vc) // Should return nil when VC generation is disabled by config
 	_ = ctx
 }
 

@@ -141,7 +141,8 @@ func (s *VCService) GenerateExecutionVC(ctx *types.ExecutionContext, inputData, 
 		return nil, fmt.Errorf("DID system is disabled")
 	}
 	if !s.config.VCRequirements.RequireVCForExecution {
-		return nil, fmt.Errorf("execution VC generation disabled by configuration")
+		// VC generation is disabled by configuration - return nil without error
+		return nil, nil
 	}
 
 	// Basic validation with consistent null handling

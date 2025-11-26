@@ -266,6 +266,16 @@ func (h *DIDHandlers) CreateExecutionVC(c *gin.Context) {
 		return
 	}
 
+	// If VC generation is disabled by config, return appropriate response
+	if executionVC == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"message":      "VC generation is disabled by configuration",
+			"execution_id": req.ExecutionContext.ExecutionID,
+			"workflow_id":  req.ExecutionContext.WorkflowID,
+		})
+		return
+	}
+
 	// Return the VC data
 	c.JSON(http.StatusOK, gin.H{
 		"vc_id":        executionVC.VCID,

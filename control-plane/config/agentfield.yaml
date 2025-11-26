@@ -13,7 +13,7 @@ agentfield:
   execution_queue:
     worker_count: 32
     request_timeout: 180s    # Set to 0s or -1s to disable the queue-level request timeout
-    agent_call_timeout: 90s  # Set to 0s or -1s to disable the agent HTTP timeout
+    agent_call_timeout: 1800s  # Set to 0s or -1s to disable the agent HTTP timeout
     lease_duration: 180s     # Set to 0s or -1s to keep leases active indefinitely
     max_attempts: 4
     failure_backoff: 500ms

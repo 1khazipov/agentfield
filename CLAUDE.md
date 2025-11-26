@@ -15,7 +15,7 @@ AgentField is a Kubernetes-style control plane for AI agents. It provides produc
 
 ### Prerequisites
 - Go 1.23+
-- Python 3.10+
+- Python 3.8+
 - Node.js 20+
 - PostgreSQL 15+ (for cloud mode)
 

@@ -44,7 +44,7 @@ func TestHandleStatusUpdateMarksSuccess(t *testing.T) {
 	require.NoError(t, storage.StoreWorkflowExecution(context.Background(), workflow))
 
 	payloadStore := services.NewFilePayloadStore(t.TempDir())
-	handler := UpdateExecutionStatusHandler(storage, payloadStore, nil)
+	handler := UpdateExecutionStatusHandler(storage, payloadStore, nil, 90*time.Second)
 
 	body := map[string]interface{}{
 		"status": "succeeded",

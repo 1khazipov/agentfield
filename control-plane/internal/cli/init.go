@@ -408,7 +408,7 @@ Example:
 
 			fmt.Println("  4. Restart your agent")
 			fmt.Println()
-			printInfo("Learn more: https://docs.agentfield.ai")
+			printInfo("Learn more: https://agentfield.ai/docs")
 			fmt.Println()
 			printSuccess("Happy building! 🎉")
 

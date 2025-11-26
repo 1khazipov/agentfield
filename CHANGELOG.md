@@ -6,6 +6,120 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 <!-- changelog:entries -->
 
+## [0.1.9] - 2025-11-25
+
+
+### Other
+
+- Un-hardcode agent request timeout (4b9789f)
+
+- Remove --import-mode=importlib from pytest config
+
+This flag was causing issues with functional tests in postgres mode.
+The Python 3.8 PyO3 issue is already fixed by disabling coverage
+for Python 3.8 in the CI workflow.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com> (629962e)
+
+- Fix linting: Remove unused concurrent.futures import
+
+The import was not needed for run_in_executor.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com> (6855ff9)
+
+- Add Python 3.8 compatibility for asyncio.to_thread
+
+asyncio.to_thread was added in Python 3.9. This commit adds a
+compatibility shim using loop.run_in_executor for Python 3.8.
+
+Fixes test failures:
+- test_execute_async_falls_back_to_requests
+- test_set_posts_payload
+- test_async_request_falls_back_to_requests
+- test_memory_round_trip
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com> (93031f0)
+
+- Fix Python 3.8 CI: Disable coverage for Python 3.8
+
+The PyO3 modules in pydantic-core can only be initialized once per
+interpreter on Python 3.8. pytest-cov causes module reimports during
+coverage collection, triggering this limitation.
+
+Solution:
+- Keep --import-mode=importlib for better import handling
+- Disable coverage collection (--no-cov) only for Python 3.8 in CI
+- Coverage still collected for Python 3.9-3.12
+
+This is a known compatibility issue with PyO3 + Python 3.8 + pytest-cov.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com> (c97af63)
+
+- Fix Python 3.8 CI: Add --import-mode=importlib to pytest config
+
+Resolves PyO3 ImportError on Python 3.8 by configuring pytest to use
+importlib import mode. This prevents PyO3 modules (pydantic-core) from
+being initialized multiple times, which causes failures on Python 3.8.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com> (78f95b2)
+
+- Fix linting error: Remove unused Dict import from pydantic_utils
+
+The Dict type from typing was imported but never used in the file.
+This was causing the CI to fail with ruff lint error F401.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com> (1e52294)
+
+- Add Python 3.8+ support to Python SDK
+
+Lower the minimum Python version requirement from 3.10 to 3.8 to improve
+compatibility with systems running older Python versions.
+
+Changes:
+- Update pyproject.toml to require Python >=3.8
+- Add Python 3.8, 3.9 to package classifiers
+- Fix type hints incompatible with Python 3.8:
+  - Replace list[T] with List[T]
+  - Replace dict[K,V] with Dict[K,V]
+  - Replace tuple[T,...] with Tuple[T,...]
+  - Replace set[T] with Set[T]
+  - Replace str | None with Optional[str]
+- Update CI to test on Python 3.8, 3.9, 3.10, 3.11, 3.12
+- Update documentation to reflect Python 3.8+ requirement
+
+All dependencies (FastAPI, Pydantic v2, litellm, etc.) support Python 3.8+.
+Tested and verified on Python 3.8.18.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com> (d797fc4)
+
+- Update doc url (dc6f361)
+
+- Fix README example: Use AIConfig for model configuration
+
+- Changed from incorrect Agent(node_id='researcher', model='gpt-4o')
+- To correct Agent(node_id='researcher', ai_config=AIConfig(model='gpt-4o'))
+- Added AIConfig import to the example
+- Model configuration should be passed through ai_config parameter, not directly to Agent (34bf018)
+
+- Removes MCP documentation section
+
+Removes the documentation section detailing the Model Context Protocol (MCP).
+This section is no longer relevant to the current project structure. (3361f8c)
+
 ## [0.1.8] - 2025-11-23
 
 

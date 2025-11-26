@@ -7,11 +7,22 @@ sharing and synchronization across distributed agents.
 
 import asyncio
 import json
+import sys
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 from .client import AgentFieldClient
 from .execution_context import ExecutionContext
 from .memory_events import MemoryEventClient, ScopedMemoryEventClient
+
+
+# Python 3.8 compatibility: asyncio.to_thread was added in Python 3.9
+if sys.version_info >= (3, 9):
+    from asyncio import to_thread as _to_thread
+else:
+    async def _to_thread(func, *args, **kwargs):
+        """Compatibility shim for asyncio.to_thread on Python 3.8."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
 
 
 def _vector_to_list(values: Union[Sequence[float], Any]) -> List[float]:
@@ -76,7 +87,7 @@ class MemoryClient:
         except ImportError:
             import requests
 
-            return await asyncio.to_thread(requests.request, method, url, **kwargs)
+            return await _to_thread(requests.request, method, url, **kwargs)
 
     async def set(
         self, key: str, data: Any, scope: Optional[str] = None, scope_id: Optional[str] = None
@@ -123,7 +134,7 @@ class MemoryClient:
             else:
                 import requests
 
-                response = await asyncio.to_thread(
+                response = await _to_thread(
                     requests.post,
                     url,
                     json=payload,

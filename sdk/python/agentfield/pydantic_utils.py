@@ -4,7 +4,7 @@ Provides FastAPI-like automatic conversion of dictionary arguments to Pydantic m
 """
 
 import inspect
-from typing import Any, Union, get_args, get_origin, get_type_hints
+from typing import Any, Tuple, Union, get_args, get_origin, get_type_hints
 
 from agentfield.logger import log_warn
 from pydantic import BaseModel, ValidationError
@@ -98,7 +98,7 @@ def convert_dict_to_model(data: Any, model_class: type) -> Any:
 
 def convert_function_args(
     func: callable, args: tuple, kwargs: dict
-) -> tuple[tuple, dict]:
+) -> Tuple[tuple, dict]:
     """
     Convert function arguments to Pydantic models based on the function's type hints.
     This mimics FastAPI's automatic request body parsing behavior.

@@ -18,14 +18,17 @@ permissions:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         working-directory: sdk/python
@@ -47,7 +50,12 @@ jobs:
 
       - name: Run tests
         working-directory: sdk/python
-        run: pytest
+        run: |
+          if [ "${{ matrix.python-version }}" == "3.8" ]; then
+            pytest --no-cov
+          else
+            pytest
+          fi
 
   # Summary job that depends on all critical checks
   required-checks:
