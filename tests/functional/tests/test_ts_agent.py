@@ -86,15 +86,42 @@ async def _wait_for_registration(http_client, node_id: str, process, timeout: fl
     raise AssertionError(f"Node {node_id} did not register in time. Last error: {last_error}")
 
 
+async def _wait_for_port_ready(port: int, process, host: str = "127.0.0.1", timeout: float = 15.0):
+    """
+    Ensure the TS agent has actually bound its HTTP listener before hitting it via the control plane.
+    This avoids a race where the agent registers/heartbeats before its server starts listening.
+    """
+    deadline = asyncio.get_event_loop().time() + timeout
+    while asyncio.get_event_loop().time() < deadline:
+        if process.returncode is not None:
+            stdout, stderr = await process.communicate()
+            raise AssertionError(
+                f"TS agent exited early before opening port {port}. "
+                f"stdout: {stdout.decode()} stderr: {stderr.decode()}"
+            )
+        try:
+            reader, writer = await asyncio.open_connection(host=host, port=port)
+            writer.close()
+            await writer.wait_closed()
+            return
+        except (ConnectionRefusedError, OSError):
+            await asyncio.sleep(0.2)
+
+    raise AssertionError(f"TS agent did not open port {host}:{port} in time")
+
+
 @pytest.mark.functional
 @pytest.mark.asyncio
 async def test_typescript_agent_registers_and_executes(async_http_client):
     node_id = unique_node_id("ts-agent")
 
-    async with run_ts_agent(node_id) as (_port, process):
+    async with run_ts_agent(node_id) as (port, process):
         registration = await _wait_for_registration(async_http_client, node_id, process)
         assert registration["id"] == node_id
         assert any(r["id"] == "echo" for r in registration.get("reasoners", []))
+
+        # Avoid race where control plane calls the agent before its listener is ready.
+        await _wait_for_port_ready(port, process)
 
         # Execute via control plane
         resp = await async_http_client.post(
