@@ -9,8 +9,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import sys
+from dotenv import load_dotenv
 
 from agentfield import AIConfig, Agent
+
+load_dotenv()
 
 if __package__ in (None, ""):
     current_dir = Path(__file__).resolve().parent
@@ -26,10 +29,12 @@ from routers import (
 )
 
 app = Agent(
-    node_id="simulation-engine",
+    node_id="simulation-enginepy",
     agentfield_server=f"{os.getenv('AGENTFIELD_SERVER', 'http://localhost:8080')}",
+    dev_mode=True,
     ai_config=AIConfig(
-        model=os.getenv("AI_MODEL", "openrouter/deepseek/deepseek-v3.1-terminus"),
+        model="openrouter/deepseek/deepseek-v3.1-terminus",  # LiteLLM auto-detects provider from model name
+        api_key=os.getenv("OPENROUTER_API_KEY"),  # or set OPENAI_API_KEY env var
     ),
 )
 
@@ -66,6 +71,6 @@ if __name__ == "__main__":
 
     port_env = os.getenv("PORT")
     if port_env is None:
-        app.run(auto_port=True, host="::")
+        app.run(auto_port=True, host="localhost")
     else:
-        app.run(port=int(port_env), host="::")
+        app.run(port=int(port_env), host="localhost")

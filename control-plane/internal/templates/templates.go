@@ -8,7 +8,7 @@ import (
 	"text/template"
 )
 
-//go:embed python/*.tmpl go/*.tmpl
+//go:embed python/*.tmpl go/*.tmpl typescript/*.tmpl
 var content embed.FS
 
 // TemplateData holds the data to be passed to the templates.
@@ -20,7 +20,7 @@ type TemplateData struct {
 	AuthorEmail string // "john@example.com"
 	CurrentYear int    // 2025
 	CreatedAt   string // "2025-01-05 10:30:00 EST"
-	Language    string // "python" or "go"
+	Language    string // "python", "go", or "typescript"
 }
 
 // GetTemplate retrieves a specific template by its path.
@@ -39,8 +39,8 @@ func GetTemplateFiles(language string) (map[string]string, error) {
 
 	// Determine the language directory
 	langDir := language
-	if language != "python" && language != "go" {
-		return nil, fmt.Errorf("unsupported language: %s (supported: python, go)", language)
+	if language != "python" && language != "go" && language != "typescript" {
+		return nil, fmt.Errorf("unsupported language: %s (supported: python, go, typescript)", language)
 	}
 
 	// Walk the language-specific directory
@@ -72,5 +72,5 @@ func ReadTemplateContent(path string) ([]byte, error) {
 
 // GetSupportedLanguages returns the list of supported languages.
 func GetSupportedLanguages() []string {
-	return []string{"python", "go"}
+	return []string{"python", "go", "typescript"}
 }

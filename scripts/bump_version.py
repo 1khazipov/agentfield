@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import json
 import re
 import sys
 from pathlib import Path
@@ -16,6 +17,7 @@ VERSION_FILE = REPO_ROOT / "VERSION"
 PYPROJECT_FILE = REPO_ROOT / "sdk/python/pyproject.toml"
 PY_INIT_FILE = REPO_ROOT / "sdk/python/agentfield/__init__.py"
 PKG_INFO_FILE = REPO_ROOT / "sdk/python/agentfield.egg-info/PKG-INFO"
+TS_PACKAGE_JSON = REPO_ROOT / "sdk/typescript/package.json"
 GO_TEMPLATE_FILE = REPO_ROOT / "control-plane/internal/templates/go/go.mod.tmpl"
 REQUIREMENT_FILES = [
     REPO_ROOT / "examples/python_agent_nodes/hello_world_rag/requirements.txt",
@@ -175,6 +177,14 @@ def update_go_template(version: SemVer) -> None:
     write_file(GO_TEMPLATE_FILE, new_text)
 
 
+def update_ts_package_json(version: SemVer) -> None:
+    if not TS_PACKAGE_JSON.exists():
+        return
+    data = json.loads(TS_PACKAGE_JSON.read_text(encoding="utf-8"))
+    data["version"] = str(version)
+    write_file(TS_PACKAGE_JSON, json.dumps(data, indent=2) + "\n")
+
+
 def apply_version(version: SemVer) -> None:
     update_version_file(version)
     update_pyproject(version)
@@ -182,6 +192,7 @@ def apply_version(version: SemVer) -> None:
     update_pkg_info(version)
     update_requirements(version)
     update_go_template(version)
+    update_ts_package_json(version)
 
 
 def main(argv: Optional[list[str]] = None) -> int:

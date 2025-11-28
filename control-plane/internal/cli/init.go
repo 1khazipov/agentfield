@@ -206,7 +206,7 @@ func NewInitCommand() *cobra.Command {
 directory structure and essential files.
 
 This command sets up a new project, including:
-- Language-specific project structure (Python or Go)
+- Language-specific project structure (Python, Go, or TypeScript)
 - Basic agent implementation with example reasoner
 - README.md and .gitignore files
 - Configuration for connecting to the AgentField control plane
@@ -216,7 +216,8 @@ Example:
   af init my-new-agent       # With project name
   af init my-agent --language python
   af init my-agent --defaults # Use defaults with no prompts
-  af init my-agent -l go --author "John Doe" --email "john@example.com"`,
+  af init my-agent -l go --author "John Doe" --email "john@example.com"
+  af init my-agent -l typescript`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var projectName string
@@ -276,6 +277,8 @@ Example:
 			} else if language == "" {
 				language = "python" // Default to Python
 			}
+
+			language = normalizeLanguage(language)
 
 			// Validate language
 			supportedLangs := templates.GetSupportedLanguages()
@@ -377,6 +380,8 @@ Example:
 				fmt.Println("  2. pip install -r requirements.txt")
 			} else if language == "go" {
 				fmt.Println("  2. go mod download")
+			} else if language == "typescript" {
+				fmt.Println("  2. npm install")
 			}
 
 			fmt.Println("  3. af server                    # Start AgentField server")
@@ -385,6 +390,8 @@ Example:
 				fmt.Println("  4. python main.py                  # Start your agent")
 			} else if language == "go" {
 				fmt.Println("  4. go run .                        # Start your agent")
+			} else if language == "typescript" {
+				fmt.Println("  4. npm run dev                     # Start your agent")
 			}
 
 			fmt.Println()
@@ -394,7 +401,7 @@ Example:
 			fmt.Println("    -d '{\"input\": {\"message\": \"Hello!\"}}'")
 			fmt.Println()
 			fmt.Println("Enable AI:")
-			fmt.Println("  1. Uncomment ai_config in main." + getFileExtension(language))
+			fmt.Println("  1. Uncomment the AI config block in main." + getFileExtension(language))
 
 			if language == "python" {
 				fmt.Println("  2. Set API key: export OPENAI_API_KEY=sk-...")
@@ -404,6 +411,10 @@ Example:
 				fmt.Println("  2. Set API key: export OPENAI_API_KEY=sk-...")
 				fmt.Println("     (or OPENROUTER_API_KEY for OpenRouter)")
 				fmt.Println("  3. Uncomment analyze_sentiment in reasoners.go")
+			} else if language == "typescript" {
+				fmt.Println("  2. Set API key: export OPENAI_API_KEY=sk-...")
+				fmt.Println("     (or OPENROUTER_API_KEY for OpenRouter)")
+				fmt.Println("  3. Uncomment analyzeSentiment in reasoners.ts")
 			}
 
 			fmt.Println("  4. Restart your agent")
@@ -416,7 +427,7 @@ Example:
 		},
 	}
 
-	cmd.Flags().StringVarP(&language, "language", "l", "", "Language for the agent (python or go)")
+	cmd.Flags().StringVarP(&language, "language", "l", "", "Language for the agent (python, go, or typescript)")
 	cmd.Flags().StringVarP(&authorName, "author", "a", "", "Author name for the project")
 	cmd.Flags().StringVarP(&authorEmail, "email", "e", "", "Author email for the project")
 	cmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "Run in non-interactive mode (use defaults)")
@@ -473,8 +484,23 @@ func getFileExtension(language string) string {
 		return "py"
 	case "go":
 		return "go"
+	case "typescript":
+		return "ts"
 	default:
 		return "txt"
+	}
+}
+
+func normalizeLanguage(language string) string {
+	switch strings.ToLower(language) {
+	case "ts", "typescript", "javascript", "js", "node", "nodejs":
+		return "typescript"
+	case "py", "python":
+		return "python"
+	case "go", "golang":
+		return "go"
+	default:
+		return strings.ToLower(language)
 	}
 }
 

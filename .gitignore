@@ -5,6 +5,7 @@
 *.swp
 *.swo
 test-reports/
+.env
 
 # Go
 bin/
@@ -44,3 +45,6 @@ reports/
 
 # Docker
 .docker/
+
+# Typescript
+.env
