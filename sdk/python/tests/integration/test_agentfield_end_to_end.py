@@ -109,3 +109,69 @@ async def test_reasoner_execution_roundtrip(agentfield_server, run_agent):
     assert payload["duration_ms"] >= 0
     assert "X-Workflow-ID" in response.headers
     assert "X-Execution-ID" in response.headers
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_app_ctx_available_during_execution(agentfield_server, run_agent):
+    """Verify that app.ctx is available and populated during reasoner execution."""
+    agent = Agent(
+        node_id="integration-agent-ctx",
+        agentfield_server=agentfield_server.base_url,
+        dev_mode=True,
+        callback_url="http://127.0.0.1",
+    )
+
+    # Verify ctx is None outside of execution
+    assert agent.ctx is None, "app.ctx should be None outside of execution"
+
+    @agent.reasoner()
+    async def get_context_info() -> Dict[str, Any]:
+        """Return execution context information to verify it's populated."""
+        ctx = agent.ctx
+        assert ctx is not None, "app.ctx should not be None during execution"
+
+        return {
+            "has_ctx": ctx is not None,
+            "workflow_id": ctx.workflow_id,
+            "execution_id": ctx.execution_id,
+            "run_id": ctx.run_id,
+            "session_id": ctx.session_id,
+            "actor_id": ctx.actor_id,
+            "registered": ctx.registered,
+        }
+
+    runtime = run_agent(agent)
+
+    await agent.agentfield_handler.register_with_agentfield_server(runtime.port)
+    agent._current_status = AgentStatus.READY
+    await agent.agentfield_handler.send_enhanced_heartbeat()
+
+    async with httpx.AsyncClient(
+        base_url=agentfield_server.base_url, timeout=5.0
+    ) as client:
+        await _wait_for_node(client, agent.node_id)
+        await _wait_for_status(client, agent.node_id, expected="ready")
+
+        response = await client.post(
+            f"/api/v1/reasoners/{agent.node_id}.get_context_info",
+            json={"input": {}},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    result = payload["result"]
+
+    # Verify ctx was available and populated
+    assert result["has_ctx"] is True
+    assert result["workflow_id"] is not None
+    assert result["execution_id"] is not None
+    assert result["run_id"] is not None
+    assert result["registered"] is True
+
+    # Verify the workflow_id matches the header
+    assert result["workflow_id"] == response.headers.get("X-Workflow-ID")
+    assert result["execution_id"] == response.headers.get("X-Execution-ID")
+
+    # Verify ctx is None again after execution completes
+    assert agent.ctx is None, "app.ctx should be None after execution completes"

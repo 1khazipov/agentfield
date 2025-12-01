@@ -861,6 +861,49 @@ class Agent(FastAPI):
             )
         return MemoryInterface(memory_client, self.memory_event_client)
 
+    @property
+    def ctx(self) -> Optional[ExecutionContext]:
+        """
+        Get the current execution context.
+
+        The execution context contains metadata about the current execution including:
+        - workflow_id: Unique identifier for the current workflow
+        - execution_id: Unique identifier for this specific execution
+        - run_id: Identifier for the current run
+        - session_id: Session identifier (if available)
+        - actor_id: Actor/user identifier (if available)
+        - parent_execution_id: Parent execution for nested calls
+
+        Returns:
+            ExecutionContext: The current execution context if available.
+            None: If no execution context is available (e.g., outside of reasoner/skill execution).
+
+        Example:
+            ```python
+            @app.reasoner()
+            async def handle_ticket(ticket_id: str):
+                # Access workflow ID for scoped memory
+                await app.memory.workflow(app.ctx.workflow_id).set(
+                    "ticket_status", "processing"
+                )
+
+                # Access session ID for user-scoped data
+                if app.ctx.session_id:
+                    user_history = await app.memory.session(app.ctx.session_id).get("history")
+
+                return {"ticket_id": ticket_id, "workflow": app.ctx.workflow_id}
+            ```
+        """
+        # Check thread-local context first (set during active reasoner/skill execution)
+        thread_local_ctx = get_current_context()
+        if thread_local_ctx:
+            return thread_local_ctx
+        # Only return agent-level context if it was set during an actual execution
+        # (i.e., has registered=True), not the default context created at init time
+        if self._current_execution_context and self._current_execution_context.registered:
+            return self._current_execution_context
+        return None
+
     def _populate_execution_context_with_did(
         self, execution_context, did_execution_context
     ):
