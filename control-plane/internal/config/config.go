@@ -13,13 +13,11 @@ import (
 
 // Config holds the entire configuration for the AgentField server.
 type Config struct {
-	AgentField      AgentFieldConfig      `yaml:"agentfield" mapstructure:"agentfield"`
-	Agents          AgentsConfig          `yaml:"agents" mapstructure:"agents"`
-	Features        FeatureConfig         `yaml:"features" mapstructure:"features"`
-	Storage         StorageConfig         `yaml:"storage" mapstructure:"storage"`                   // Added storage config
-	UI              UIConfig              `yaml:"ui" mapstructure:"ui"`                             // Added UI config
-	API             APIConfig             `yaml:"api" mapstructure:"api"`                           // Added API config
-	DataDirectories DataDirectoriesConfig `yaml:"data_directories" mapstructure:"data_directories"` // Added data directories config
+	AgentField AgentFieldConfig `yaml:"agentfield" mapstructure:"agentfield"`
+	Features   FeatureConfig    `yaml:"features" mapstructure:"features"`
+	Storage    StorageConfig    `yaml:"storage" mapstructure:"storage"`
+	UI         UIConfig         `yaml:"ui" mapstructure:"ui"`
+	API        APIConfig        `yaml:"api" mapstructure:"api"`
 }
 
 // UIConfig holds configuration for the web UI.
@@ -29,19 +27,13 @@ type UIConfig struct {
 	SourcePath string `yaml:"source_path" mapstructure:"source_path"` // Path to UI source for building
 	DistPath   string `yaml:"dist_path" mapstructure:"dist_path"`     // Path to built UI assets for serving
 	DevPort    int    `yaml:"dev_port" mapstructure:"dev_port"`       // Port for UI dev server
-	BackendURL string `yaml:"backend_url" mapstructure:"backend_url"` // URL of the backend if UI is separate
 }
 
 // AgentFieldConfig holds the core AgentField server configuration.
 type AgentFieldConfig struct {
-	Port                    int                    `yaml:"port"`
-	DatabaseURL             string                 `yaml:"database_url"`
-	MaxConcurrentRequests   int                    `yaml:"max_concurrent_requests"`
-	RequestTimeout          time.Duration          `yaml:"request_timeout"`
-	CircuitBreakerThreshold int                    `yaml:"circuit_breaker_threshold"`
-	Mode                    string                 `yaml:"mode"`
-	ExecutionCleanup        ExecutionCleanupConfig `yaml:"execution_cleanup" mapstructure:"execution_cleanup"`
-	ExecutionQueue          ExecutionQueueConfig   `yaml:"execution_queue" mapstructure:"execution_queue"`
+	Port             int                    `yaml:"port"`
+	ExecutionCleanup ExecutionCleanupConfig `yaml:"execution_cleanup" mapstructure:"execution_cleanup"`
+	ExecutionQueue   ExecutionQueueConfig   `yaml:"execution_queue" mapstructure:"execution_queue"`
 }
 
 // ExecutionCleanupConfig holds configuration for execution cleanup and garbage collection
@@ -54,66 +46,18 @@ type ExecutionCleanupConfig struct {
 	StaleExecutionTimeout  time.Duration `yaml:"stale_execution_timeout" mapstructure:"stale_execution_timeout" default:"30m"`
 }
 
-// ExecutionQueueConfig configures the durable execution worker pool.
+// ExecutionQueueConfig configures execution and webhook settings.
 type ExecutionQueueConfig struct {
-	WorkerCount            int           `yaml:"worker_count" mapstructure:"worker_count"`
-	RequestTimeout         time.Duration `yaml:"request_timeout" mapstructure:"request_timeout"`
 	AgentCallTimeout       time.Duration `yaml:"agent_call_timeout" mapstructure:"agent_call_timeout"`
-	LeaseDuration          time.Duration `yaml:"lease_duration" mapstructure:"lease_duration"`
-	MaxAttempts            int           `yaml:"max_attempts" mapstructure:"max_attempts"`
-	FailureBackoff         time.Duration `yaml:"failure_backoff" mapstructure:"failure_backoff"`
-	MaxFailureBackoff      time.Duration `yaml:"max_failure_backoff" mapstructure:"max_failure_backoff"`
-	PollInterval           time.Duration `yaml:"poll_interval" mapstructure:"poll_interval"`
-	ResultPreviewBytes     int           `yaml:"result_preview_bytes" mapstructure:"result_preview_bytes"`
-	QueueSoftLimit         int           `yaml:"queue_soft_limit" mapstructure:"queue_soft_limit"`
-	WaiterMapLimit         int           `yaml:"waiter_map_limit" mapstructure:"waiter_map_limit"`
 	WebhookTimeout         time.Duration `yaml:"webhook_timeout" mapstructure:"webhook_timeout"`
 	WebhookMaxAttempts     int           `yaml:"webhook_max_attempts" mapstructure:"webhook_max_attempts"`
 	WebhookRetryBackoff    time.Duration `yaml:"webhook_retry_backoff" mapstructure:"webhook_retry_backoff"`
 	WebhookMaxRetryBackoff time.Duration `yaml:"webhook_max_retry_backoff" mapstructure:"webhook_max_retry_backoff"`
 }
 
-// AgentsConfig holds configuration related to agent management.
-type AgentsConfig struct {
-	Discovery DiscoveryConfig `yaml:"discovery"`
-	Scaling   ScalingConfig   `yaml:"scaling"`
-}
-
-// DiscoveryConfig holds configuration for agent discovery.
-type DiscoveryConfig struct {
-	ScanInterval        time.Duration `yaml:"scan_interval"`
-	HealthCheckInterval time.Duration `yaml:"health_check_interval"`
-}
-
-// ScalingConfig holds configuration for agent scaling.
-type ScalingConfig struct {
-	AutoScale   bool `yaml:"auto_scale"`
-	MinReplicas int  `yaml:"min_replicas"`
-	MaxReplicas int  `yaml:"max_replicas"`
-}
-
 // FeatureConfig holds configuration for enabling/disabling features.
 type FeatureConfig struct {
-	Core       CoreFeatures       `yaml:"core"`
-	Enterprise EnterpriseFeatures `yaml:"enterprise"`
-	DID        DIDConfig          `yaml:"did"`
-}
-
-// CoreFeatures holds configuration for core features.
-type CoreFeatures struct {
-	MemoryManagement bool `yaml:"memory_management" default:"true"`
-	ExecutionLogging bool `yaml:"execution_logging" default:"true"`
-	BasicMetrics     bool `yaml:"basic_metrics" default:"true"`
-	WebSocketSupport bool `yaml:"websocket_support" default:"true"`
-}
-
-// EnterpriseFeatures holds configuration for enterprise features.
-type EnterpriseFeatures struct {
-	Enabled         bool `yaml:"enabled" default:"false"`
-	ComplianceMode  bool `yaml:"compliance_mode" default:"false"`
-	AuditLogging    bool `yaml:"audit_logging" default:"false"`
-	RoleBasedAccess bool `yaml:"role_based_access" default:"false"`
-	DataEncryption  bool `yaml:"data_encryption" default:"false"`
+	DID DIDConfig `yaml:"did"`
 }
 
 // DIDConfig holds configuration for DID identity system.
@@ -165,19 +109,6 @@ type CORSConfig struct {
 // work with a single definition while keeping the canonical struct colocated
 // with the implementation in the storage package.
 type StorageConfig = storage.StorageConfig
-
-// DataDirectoriesConfig holds configuration for AgentField data directory paths
-type DataDirectoriesConfig struct {
-	AgentFieldHome   string `yaml:"agentfield_home" mapstructure:"agentfield_home"`       // Can be overridden by AGENTFIELD_HOME env var
-	DatabaseDir      string `yaml:"database_dir" mapstructure:"database_dir"`             // Relative to agentfield_home
-	KeysDir          string `yaml:"keys_dir" mapstructure:"keys_dir"`                     // Relative to agentfield_home
-	DIDRegistriesDir string `yaml:"did_registries_dir" mapstructure:"did_registries_dir"` // Relative to agentfield_home
-	VCsDir           string `yaml:"vcs_dir" mapstructure:"vcs_dir"`                       // Relative to agentfield_home
-	AgentsDir        string `yaml:"agents_dir" mapstructure:"agents_dir"`                 // Relative to agentfield_home
-	LogsDir          string `yaml:"logs_dir" mapstructure:"logs_dir"`                     // Relative to agentfield_home
-	ConfigDir        string `yaml:"config_dir" mapstructure:"config_dir"`                 // Relative to agentfield_home
-	TempDir          string `yaml:"temp_dir" mapstructure:"temp_dir"`                     // Relative to agentfield_home
-}
 
 // DefaultConfigPath is the default path for the af configuration file.
 const DefaultConfigPath = "agentfield.yaml" // Or "./agentfield.yaml", "config/agentfield.yaml" depending on convention

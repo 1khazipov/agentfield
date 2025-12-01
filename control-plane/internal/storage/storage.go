@@ -209,7 +209,6 @@ type StorageConfig struct {
 	Local    LocalStorageConfig    `yaml:"local" mapstructure:"local"`
 	Postgres PostgresStorageConfig `yaml:"postgres" mapstructure:"postgres"`
 	Vector   VectorStoreConfig     `yaml:"vector" mapstructure:"vector"`
-	Config   interface{}           `yaml:"config" mapstructure:"config"`
 }
 
 // PostgresStorageConfig holds configuration for the PostgreSQL storage provider.
@@ -230,11 +229,8 @@ type PostgresStorageConfig struct {
 
 // LocalStorageConfig holds configuration for the local storage provider.
 type LocalStorageConfig struct {
-	DatabasePath  string `yaml:"database_path" mapstructure:"database_path"`
-	KVStorePath   string `yaml:"kv_store_path" mapstructure:"kv_store_path"`
-	CacheSize     int    `yaml:"cache_size" mapstructure:"cache_size"`
-	RetentionDays int    `yaml:"retention_days" mapstructure:"retention_days"`
-	AutoVacuum    bool   `yaml:"auto_vacuum" mapstructure:"auto_vacuum"`
+	DatabasePath string `yaml:"database_path" mapstructure:"database_path"`
+	KVStorePath  string `yaml:"kv_store_path" mapstructure:"kv_store_path"`
 }
 
 // VectorStoreConfig controls vector storage behavior.
@@ -286,7 +282,6 @@ func (sf *StorageFactory) CreateStorage(config StorageConfig) (StorageProvider, 
 			Local:    config.Local,
 			Postgres: config.Postgres,
 			Vector:   config.Vector,
-			Config:   config.Config,
 		}); err != nil {
 			return nil, nil, fmt.Errorf("failed to initialize local storage: %w", err)
 		}
@@ -300,7 +295,6 @@ func (sf *StorageFactory) CreateStorage(config StorageConfig) (StorageProvider, 
 			Local:    config.Local,
 			Postgres: config.Postgres,
 			Vector:   config.Vector,
-			Config:   config.Config,
 		}); err != nil {
 			return nil, nil, fmt.Errorf("failed to initialize postgres storage: %w", err)
 		}

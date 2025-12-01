@@ -1,9 +1,5 @@
 agentfield:
   port: 8080
-  mode: "local"
-  max_concurrent_requests: 1024
-  request_timeout: 180s
-  circuit_breaker_threshold: 20
   execution_cleanup:
     enabled: true
     retention_period: 72h
@@ -11,17 +7,7 @@ agentfield:
     batch_size: 200
     preserve_recent_duration: 1h
   execution_queue:
-    worker_count: 32
-    request_timeout: 180s    # Set to 0s or -1s to disable the queue-level request timeout
-    agent_call_timeout: 1800s  # Set to 0s or -1s to disable the agent HTTP timeout
-    lease_duration: 180s     # Set to 0s or -1s to keep leases active indefinitely
-    max_attempts: 4
-    failure_backoff: 500ms
-    max_failure_backoff: 30s
-    poll_interval: 100ms
-    result_preview_bytes: 4096
-    queue_soft_limit: 20000
-    waiter_map_limit: 4000
+    agent_call_timeout: 1800s  # Timeout for agent HTTP calls (0s or -1s to disable)
     webhook_timeout: 10s          # Per-attempt timeout for webhook deliveries
     webhook_max_attempts: 3       # Number of attempts before marking the webhook as failed
     webhook_retry_backoff: 1s     # Initial backoff between webhook retries (exponential)
@@ -31,7 +17,6 @@ ui:
   enabled: true
   mode: "embedded"
   dev_port: 5173
-  backend_url: ""
 
 api:
   cors:
@@ -61,13 +46,9 @@ storage:
   local:
     database_path: ""
     kv_store_path: ""
-    cache_size: 1000
-    retention_days: 30
-    auto_vacuum: true
   vector:
     enabled: true
     distance: "cosine"
-  config: {}
 
 features:
   did:
@@ -90,12 +71,3 @@ features:
       encryption: "AES-256-GCM"
       backup_enabled: true
       backup_interval: "24h"
-
-agents:
-  discovery:
-    scan_interval: "30s"
-    health_check_interval: "10s"
-  scaling:
-    auto_scale: false
-    min_replicas: 1
-    max_replicas: 10
