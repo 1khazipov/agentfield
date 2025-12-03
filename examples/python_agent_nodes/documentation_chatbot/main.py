@@ -67,6 +67,6 @@ if __name__ == "__main__":
     print("  - Smart document ranking (frequency + relevance scoring)")
     port_env = os.getenv("PORT")
     if port_env is None:
-        app.run(auto_port=True, host="::")
+        app.run(auto_port=True)
     else:
-        app.run(port=int(port_env), host="::")
+        app.run(port=int(port_env))
