@@ -50,8 +50,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	hasControlPlane := strings.TrimSpace(cfg.AgentFieldURL) != ""
-
 	addEmojiLocal := func(message string) map[string]any {
 		trimmed := strings.TrimSpace(message)
 		if trimmed == "" {
@@ -77,17 +75,15 @@ func main() {
 		}
 		greeting := fmt.Sprintf("Hello, %s!", name)
 
-		var decorated map[string]any
-		if hasControlPlane {
-			res, callErr := ag.Call(ctx, "add_emoji", map[string]any{"message": greeting})
-			if callErr == nil {
-				decorated = res
+		decorated := addEmojiLocal(greeting)
+		if res, callErr := ag.CallLocal(ctx, "add_emoji", map[string]any{"message": greeting}); callErr == nil {
+			if typed, ok := res.(map[string]any); ok {
+				decorated = typed
 			} else {
-				log.Printf("warn: control plane call to add_emoji failed: %v", callErr)
+				log.Printf("warn: unexpected add_emoji result type: %T", res)
 			}
-		}
-		if decorated == nil {
-			decorated = addEmojiLocal(greeting)
+		} else {
+			log.Printf("warn: local call to add_emoji failed: %v", callErr)
 		}
 
 		return map[string]any{
@@ -105,13 +101,11 @@ func main() {
 			message = "Agentfield"
 		}
 
-		if hasControlPlane {
-			res, callErr := ag.Call(ctx, "say_hello", map[string]any{"name": message})
-			if callErr == nil {
-				return res, nil
-			}
-			log.Printf("warn: control plane call to say_hello failed: %v", callErr)
+		res, callErr := ag.CallLocal(ctx, "say_hello", map[string]any{"name": message})
+		if callErr == nil {
+			return res, nil
 		}
+		log.Printf("warn: local call to say_hello failed: %v", callErr)
 
 		return ag.Execute(ctx, "say_hello", map[string]any{"name": message})
 	},

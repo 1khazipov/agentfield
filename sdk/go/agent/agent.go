@@ -32,6 +32,13 @@ type ExecutionContext struct {
 	ParentExecutionID string
 	SessionID         string
 	ActorID           string
+	WorkflowID        string
+	ParentWorkflowID  string
+	RootWorkflowID    string
+	Depth             int
+	AgentNodeID       string
+	ReasonerName      string
+	StartedAt         time.Time
 }
 
 func init() {
@@ -234,8 +241,47 @@ func executionContextFrom(ctx context.Context) ExecutionContext {
 	return ExecutionContext{}
 }
 
+// ChildContext creates a new execution context for a nested local call.
+func (ec ExecutionContext) ChildContext(agentNodeID, reasonerName string) ExecutionContext {
+	runID := ec.RunID
+	if runID == "" {
+		runID = ec.WorkflowID
+	}
+	if runID == "" {
+		runID = generateRunID()
+	}
+
+	workflowID := ec.WorkflowID
+	if workflowID == "" {
+		workflowID = runID
+	}
+	rootWorkflowID := ec.RootWorkflowID
+	if rootWorkflowID == "" {
+		rootWorkflowID = workflowID
+	}
+
+	return ExecutionContext{
+		RunID:             runID,
+		ExecutionID:       generateExecutionID(),
+		ParentExecutionID: ec.ExecutionID,
+		SessionID:         ec.SessionID,
+		ActorID:           ec.ActorID,
+		WorkflowID:        workflowID,
+		ParentWorkflowID:  workflowID,
+		RootWorkflowID:    rootWorkflowID,
+		Depth:             ec.Depth + 1,
+		AgentNodeID:       agentNodeID,
+		ReasonerName:      reasonerName,
+		StartedAt:         time.Now(),
+	}
+}
+
 func generateRunID() string {
 	return fmt.Sprintf("run_%d_%06d", time.Now().UnixNano(), rand.Intn(1_000_000))
+}
+
+func generateExecutionID() string {
+	return fmt.Sprintf("exec_%d_%06d", time.Now().UnixNano(), rand.Intn(1_000_000))
 }
 
 func cloneInputMap(input map[string]any) map[string]any {
@@ -486,6 +532,16 @@ func (a *Agent) handleReasoner(w http.ResponseWriter, r *http.Request) {
 		ParentExecutionID: r.Header.Get("X-Parent-Execution-ID"),
 		SessionID:         r.Header.Get("X-Session-ID"),
 		ActorID:           r.Header.Get("X-Actor-ID"),
+		WorkflowID:        r.Header.Get("X-Workflow-ID"),
+		AgentNodeID:       a.cfg.NodeID,
+		ReasonerName:      name,
+		StartedAt:         time.Now(),
+	}
+	if execCtx.WorkflowID == "" {
+		execCtx.WorkflowID = execCtx.RunID
+	}
+	if execCtx.RootWorkflowID == "" {
+		execCtx.RootWorkflowID = execCtx.WorkflowID
 	}
 
 	ctx := contextWithExecution(r.Context(), execCtx)
@@ -681,6 +737,139 @@ func (a *Agent) Call(ctx context.Context, target string, input map[string]any) (
 	return execResp.Result, nil
 }
 
+// emitWorkflowEvent sends a workflow event to the control plane asynchronously.
+// Failures are logged but do not impact the caller.
+func (a *Agent) emitWorkflowEvent(
+	execCtx ExecutionContext,
+	status string,
+	input map[string]any,
+	result any,
+	err error,
+	durationMS int64,
+) {
+	if strings.TrimSpace(a.cfg.AgentFieldURL) == "" {
+		return
+	}
+
+	event := types.WorkflowExecutionEvent{
+		ExecutionID: execCtx.ExecutionID,
+		WorkflowID:  execCtx.WorkflowID,
+		RunID:       execCtx.RunID,
+		ReasonerID:  execCtx.ReasonerName,
+		Type:        execCtx.ReasonerName,
+		AgentNodeID: a.cfg.NodeID,
+		Status:      status,
+	}
+
+	if execCtx.ParentExecutionID != "" {
+		event.ParentExecutionID = &execCtx.ParentExecutionID
+	}
+	if execCtx.ParentWorkflowID != "" {
+		event.ParentWorkflowID = &execCtx.ParentWorkflowID
+	}
+	if input != nil {
+		event.InputData = input
+	}
+	if result != nil {
+		event.Result = result
+	}
+	if err != nil {
+		event.Error = err.Error()
+	}
+	if durationMS > 0 {
+		event.DurationMS = &durationMS
+	}
+
+	if sendErr := a.sendWorkflowEvent(event); sendErr != nil {
+		a.logger.Printf("workflow event send failed: %v", sendErr)
+	}
+}
+
+func (a *Agent) sendWorkflowEvent(event types.WorkflowExecutionEvent) error {
+	url := strings.TrimSuffix(a.cfg.AgentFieldURL, "/") + "/api/v1/workflow/executions/events"
+
+	body, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("marshal event: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if a.cfg.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+a.cfg.Token)
+	}
+
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode, strings.TrimSpace(string(bodyBytes)))
+	}
+
+	return nil
+}
+
+// CallLocal invokes a registered reasoner directly within this agent process,
+// maintaining execution lineage and emitting workflow events to the control plane.
+// It should be used for same-node composition; use Call for cross-node calls.
+func (a *Agent) CallLocal(ctx context.Context, reasonerName string, input map[string]any) (any, error) {
+	reasoner, ok := a.reasoners[reasonerName]
+	if !ok {
+		return nil, fmt.Errorf("unknown reasoner %q", reasonerName)
+	}
+
+	parentCtx := executionContextFrom(ctx)
+
+	childCtx := a.buildChildContext(parentCtx, reasonerName)
+	ctx = contextWithExecution(ctx, childCtx)
+
+	a.emitWorkflowEvent(childCtx, "running", input, nil, nil, 0)
+
+	start := time.Now()
+	result, err := reasoner.Handler(ctx, input)
+	durationMS := time.Since(start).Milliseconds()
+
+	if err != nil {
+		a.emitWorkflowEvent(childCtx, "failed", input, nil, err, durationMS)
+	} else {
+		a.emitWorkflowEvent(childCtx, "succeeded", input, result, nil, durationMS)
+	}
+
+	return result, err
+}
+
+func (a *Agent) buildChildContext(parent ExecutionContext, reasonerName string) ExecutionContext {
+	if parent.RunID == "" && parent.ExecutionID == "" {
+		runID := generateRunID()
+		return ExecutionContext{
+			RunID:          runID,
+			ExecutionID:    generateExecutionID(),
+			SessionID:      parent.SessionID,
+			ActorID:        parent.ActorID,
+			WorkflowID:     runID,
+			RootWorkflowID: runID,
+			Depth:          0,
+			AgentNodeID:    a.cfg.NodeID,
+			ReasonerName:   reasonerName,
+			StartedAt:      time.Now(),
+		}
+	}
+
+	return parent.ChildContext(a.cfg.NodeID, reasonerName)
+}
+
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -776,4 +965,9 @@ func (a *Agent) AIStream(ctx context.Context, prompt string, opts ...ai.Option) 
 		return chunkCh, errCh
 	}
 	return a.aiClient.StreamComplete(ctx, prompt, opts...)
+}
+
+// ExecutionContextFrom returns the execution context embedded in the provided context, if any.
+func ExecutionContextFrom(ctx context.Context) ExecutionContext {
+	return executionContextFrom(ctx)
 }

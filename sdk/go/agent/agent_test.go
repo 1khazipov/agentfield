@@ -731,3 +731,180 @@ func TestHandleReasonerAsyncPostsStatus(t *testing.T) {
 		t.Fatal("timed out waiting for callback payload")
 	}
 }
+
+func TestChildContext(t *testing.T) {
+	parent := ExecutionContext{
+		RunID:          "run-1",
+		ExecutionID:    "exec-parent",
+		WorkflowID:     "wf-1",
+		RootWorkflowID: "root-wf",
+		SessionID:      "session-1",
+		ActorID:        "actor-1",
+		Depth:          2,
+	}
+
+	child := parent.ChildContext("node-1", "child-reasoner")
+
+	assert.Equal(t, "run-1", child.RunID)
+	assert.Equal(t, "wf-1", child.WorkflowID)
+	assert.Equal(t, "wf-1", child.ParentWorkflowID)
+	assert.Equal(t, "root-wf", child.RootWorkflowID)
+	assert.Equal(t, "exec-parent", child.ParentExecutionID)
+	assert.Equal(t, 3, child.Depth)
+	assert.Equal(t, "node-1", child.AgentNodeID)
+	assert.Equal(t, "child-reasoner", child.ReasonerName)
+	assert.NotEmpty(t, child.ExecutionID)
+	assert.False(t, child.StartedAt.IsZero())
+}
+
+func TestChildContextGeneratesRunID(t *testing.T) {
+	parent := ExecutionContext{}
+
+	child := parent.ChildContext("node-1", "child-reasoner")
+
+	assert.NotEmpty(t, child.RunID)
+	assert.NotEmpty(t, child.WorkflowID)
+	assert.Equal(t, child.WorkflowID, child.ParentWorkflowID)
+	assert.Equal(t, child.WorkflowID, child.RootWorkflowID)
+}
+
+func TestBuildChildContext(t *testing.T) {
+	cfg := Config{
+		NodeID:        "node-1",
+		Version:       "1.0.0",
+		AgentFieldURL: "http://example.com",
+		Logger:        log.New(io.Discard, "", 0),
+	}
+
+	ag, err := New(cfg)
+	require.NoError(t, err)
+
+	parent := ExecutionContext{
+		RunID:          "run-1",
+		ExecutionID:    "exec-parent",
+		WorkflowID:     "wf-1",
+		RootWorkflowID: "root-wf",
+		Depth:          1,
+		SessionID:      "session-1",
+		ActorID:        "actor-1",
+	}
+
+	child := ag.buildChildContext(parent, "child")
+
+	assert.Equal(t, parent.RunID, child.RunID)
+	assert.Equal(t, parent.ExecutionID, child.ParentExecutionID)
+	assert.Equal(t, parent.WorkflowID, child.WorkflowID)
+	assert.Equal(t, parent.WorkflowID, child.ParentWorkflowID)
+	assert.Equal(t, parent.RootWorkflowID, child.RootWorkflowID)
+	assert.Equal(t, "node-1", child.AgentNodeID)
+	assert.Equal(t, "child", child.ReasonerName)
+	assert.Equal(t, parent.Depth+1, child.Depth)
+	assert.NotEmpty(t, child.ExecutionID)
+}
+
+func TestBuildChildContextRoot(t *testing.T) {
+	cfg := Config{
+		NodeID:  "node-1",
+		Version: "1.0.0",
+		Logger:  log.New(io.Discard, "", 0),
+	}
+
+	ag, err := New(cfg)
+	require.NoError(t, err)
+
+	child := ag.buildChildContext(ExecutionContext{}, "root-reasoner")
+
+	assert.NotEmpty(t, child.RunID)
+	assert.NotEmpty(t, child.ExecutionID)
+	assert.Equal(t, child.WorkflowID, child.RootWorkflowID)
+	assert.Empty(t, child.ParentExecutionID)
+	assert.Equal(t, "node-1", child.AgentNodeID)
+	assert.Equal(t, "root-reasoner", child.ReasonerName)
+}
+
+func TestCallLocalEmitsEvents(t *testing.T) {
+	eventCh := make(chan types.WorkflowExecutionEvent, 4)
+	eventServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		body, _ := io.ReadAll(r.Body)
+		var event types.WorkflowExecutionEvent
+		if err := json.Unmarshal(body, &event); err == nil {
+			eventCh <- event
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer eventServer.Close()
+
+	cfg := Config{
+		NodeID:        "node-1",
+		Version:       "1.0.0",
+		AgentFieldURL: eventServer.URL,
+		Logger:        log.New(io.Discard, "", 0),
+	}
+
+	ag, err := New(cfg)
+	require.NoError(t, err)
+
+	ag.RegisterReasoner("child", func(ctx context.Context, input map[string]any) (any, error) {
+		return map[string]any{"echo": input["msg"]}, nil
+	})
+
+	parentCtx := contextWithExecution(context.Background(), ExecutionContext{
+		RunID:          "run-1",
+		ExecutionID:    "exec-parent",
+		WorkflowID:     "wf-1",
+		RootWorkflowID: "wf-1",
+		ReasonerName:   "parent",
+		AgentNodeID:    "node-1",
+	})
+
+	res, err := ag.CallLocal(parentCtx, "child", map[string]any{"msg": "hi"})
+	require.NoError(t, err)
+
+	resultMap, ok := res.(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "hi", resultMap["echo"])
+
+	var received []types.WorkflowExecutionEvent
+	timeout := time.After(2 * time.Second)
+
+	for len(received) < 2 {
+		select {
+		case evt := <-eventCh:
+			received = append(received, evt)
+		case <-timeout:
+			t.Fatalf("timed out waiting for workflow events, received %d", len(received))
+		}
+	}
+
+	statuses := map[string]bool{}
+	for _, evt := range received {
+		assert.Equal(t, "child", evt.ReasonerID)
+		assert.Equal(t, "node-1", evt.AgentNodeID)
+		assert.Equal(t, "wf-1", evt.WorkflowID)
+		assert.Equal(t, "run-1", evt.RunID)
+		if evt.ParentExecutionID == nil {
+			t.Fatalf("expected ParentExecutionID to be set")
+		}
+		assert.Equal(t, "exec-parent", *evt.ParentExecutionID)
+		statuses[evt.Status] = true
+	}
+
+	assert.True(t, statuses["running"])
+	assert.True(t, statuses["succeeded"])
+}
+
+func TestCallLocalUnknownReasoner(t *testing.T) {
+	cfg := Config{
+		NodeID:  "node-1",
+		Version: "1.0.0",
+		Logger:  log.New(io.Discard, "", 0),
+	}
+
+	ag, err := New(cfg)
+	require.NoError(t, err)
+
+	_, err = ag.CallLocal(context.Background(), "missing", map[string]any{})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown reasoner")
+}

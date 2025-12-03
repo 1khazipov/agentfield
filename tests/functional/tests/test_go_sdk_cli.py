@@ -43,6 +43,32 @@ async def _wait_for_workflow_run(client, run_id: str, *, expected_reasoners: set
     )
 
 
+async def _wait_for_workflow_run_completed(
+    client, run_id: str, *, expected_reasoners: set[str], timeout: float = 45.0
+):
+    """Poll workflow run detail endpoint until expected reasoners appear and are terminal."""
+    timeline = await _wait_for_workflow_run(client, run_id, expected_reasoners=expected_reasoners, timeout=timeout)
+
+    deadline = time.time() + timeout
+    last_body = None
+    while time.time() < deadline:
+        reasoners = {node.get("reasoner_id") for node in timeline}
+        statuses = {node.get("status") for node in timeline}
+        if expected_reasoners.issubset(reasoners) and statuses == {"succeeded"}:
+            return timeline
+
+        await asyncio.sleep(1)
+        resp = await client.get(f"/api/ui/v2/workflow-runs/{run_id}")
+        if resp.status_code == 200:
+            body = resp.json()
+            last_body = body
+            timeline = body.get("executions", [])
+
+    raise AssertionError(
+        f"Workflow run {run_id} did not reach terminal success after {timeout}s: {json.dumps(last_body, indent=2)}"
+    )
+
+
 async def _wait_for_agent_health(url: str, timeout: float = 20.0):
     deadline = time.time() + timeout
     async with httpx.AsyncClient(timeout=5.0) as client:
@@ -81,7 +107,8 @@ async def test_go_sdk_cli_and_control_plane(async_http_client, control_plane_url
     """
     Verify Go SDK hello-world example works as both CLI and control-plane node:
     - CLI invocation prints greeting without control-plane dependency.
-    - Server mode registers and executes via control plane, producing parent/child workflow edges.
+    - Server mode registers and executes via control plane while nested reasoners call each other locally,
+      still producing parent/child workflow edges in the control plane DAG.
     """
     node_id = unique_node_id("go-hello-agent")
 
@@ -121,7 +148,7 @@ async def test_go_sdk_cli_and_control_plane(async_http_client, control_plane_url
         assert result.get("name") == "Hello, Agentfield!"
         assert "greeting" in result
 
-        timeline = await _wait_for_workflow_run(
+        timeline = await _wait_for_workflow_run_completed(
             async_http_client,
             workflow_id,
             expected_reasoners={"demo_echo", "say_hello", "add_emoji"},
@@ -148,3 +175,59 @@ async def test_go_sdk_cli_and_control_plane(async_http_client, control_plane_url
         stdout, stderr = await cli_proc.communicate()
         assert cli_proc.returncode == 0, f"CLI failed rc={cli_proc.returncode} stderr={stderr.decode()}"
         assert "Hello, CLI Functional" in stdout.decode()
+
+
+@pytest.mark.functional
+@pytest.mark.asyncio
+async def test_go_sdk_local_calls_emit_workflow_events(async_http_client, control_plane_url):
+    """
+    Ensure Go SDK local composition (CallLocal) still emits workflow events so the control plane builds a full DAG.
+    """
+    try:
+        get_go_agent_binary("hello")
+    except FileNotFoundError:
+        pytest.skip("Go agent binary not built; ensure go_agents are compiled in test image")
+
+    node_id = unique_node_id("go-local-dag")
+
+    env_server = {
+        **os.environ,
+        "AGENTFIELD_URL": control_plane_url,
+        "AGENT_NODE_ID": node_id,
+        "AGENT_LISTEN_ADDR": ":8001",
+        "AGENT_PUBLIC_URL": "http://test-runner:8001",
+    }
+
+    async with run_go_agent("hello", args=["serve"], env=env_server):
+        await _wait_for_registration(async_http_client, node_id)
+        await _wait_for_agent_health("http://127.0.0.1:8001/health")
+
+        payload = {"input": {"message": "Local DAG"}}
+        resp = await async_http_client.post(
+            f"/api/v1/execute/{node_id}.demo_echo", json=payload, timeout=30.0
+        )
+        assert resp.status_code == 200, f"execute failed: {resp.status_code} {resp.text}"
+
+        body = resp.json()
+        execution_id = body.get("execution_id")
+        assert execution_id, f"execution_id missing in response: {body}"
+
+        workflow_id = await _resolve_workflow_id_from_execution(async_http_client, execution_id)
+        timeline = await _wait_for_workflow_run_completed(
+            async_http_client,
+            workflow_id,
+            expected_reasoners={"demo_echo", "say_hello", "add_emoji"},
+            timeout=30.0,
+        )
+
+        assert len(timeline) == 3
+        id_by_reasoner = {node["reasoner_id"]: node["execution_id"] for node in timeline}
+        parent_by_reasoner = {node["reasoner_id"]: node.get("parent_execution_id") for node in timeline}
+
+        assert parent_by_reasoner.get("demo_echo") in (None, "", "null")
+        assert parent_by_reasoner.get("say_hello") == id_by_reasoner["demo_echo"]
+        assert parent_by_reasoner.get("add_emoji") == id_by_reasoner["say_hello"]
+
+        for node in timeline:
+            assert node.get("agent_node_id") == node_id
+            assert node.get("workflow_depth") in (0, 1, 2)
