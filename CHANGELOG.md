@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 <!-- changelog:entries -->
 
+## [0.1.17] - 2025-12-03
+
+
+### Fixed
+
+- Fix(control-plane): remove redundant WebSocket origin check
+
+The WebSocket upgrader's CheckOrigin was rejecting server-to-server
+connections (like from Python SDK agents) that don't have an Origin
+header. This caused 403 errors when agents tried to connect to memory
+events WebSocket endpoint with auth enabled.
+
+The origin check was redundant because:
+1. Auth middleware already validates API keys before this handler
+2. If auth is enabled, only valid API key holders reach this point
+3. If auth is disabled, all connections are allowed anyway
+
+Removes the origin checking logic and simplifies NewMemoryEventsHandler
+to just take the storage provider.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com> (44f05c4)
+
 ## [0.1.16] - 2025-12-03
 
 
