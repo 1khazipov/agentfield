@@ -746,7 +746,7 @@ class Agent(FastAPI):
         """Scans for methods decorated with @on_change and registers them as listeners."""
         if not self.memory_event_client:
             self.memory_event_client = MemoryEventClient(
-                self.agentfield_server, self._get_current_execution_context()
+                self.agentfield_server, self._get_current_execution_context(), self.api_key
             )
 
         for name, method in inspect.getmembers(self, predicate=inspect.ismethod):
@@ -865,7 +865,7 @@ class Agent(FastAPI):
         )
         if not self.memory_event_client:
             self.memory_event_client = MemoryEventClient(
-                self.agentfield_server, self._get_current_execution_context()
+                self.agentfield_server, self._get_current_execution_context(), self.api_key
             )
         return MemoryInterface(memory_client, self.memory_event_client)
 
