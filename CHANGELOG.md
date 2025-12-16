@@ -6,6 +6,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 <!-- changelog:entries -->
 
+## [0.1.23-rc.1] - 2025-12-16
+
+
+### Fixed
+
+- Fix: use executions table for notes storage instead of workflow_executions (#75)
+
+* fix: use executions table for notes storage instead of workflow_executions
+
+The note handlers (AddExecutionNoteHandler, GetExecutionNotesHandler) were
+querying the workflow_executions table, but execution data is actually stored
+in the executions table. This caused "execution not found" errors when adding
+or retrieving notes via app.note().
+
+Changes:
+- Add Notes field to types.Execution struct
+- Add notes column to ExecutionRecordModel (GORM auto-migrates this)
+- Update SQL queries in execution_records.go to include notes column
+- Update scanExecution to deserialize notes JSON
+- Change ExecutionNoteStorage interface to use GetExecutionRecord and
+  UpdateExecutionRecord instead of GetWorkflowExecution and
+  UpdateWorkflowExecution
+- Update AddExecutionNoteHandler to use UpdateExecutionRecord
+- Update GetExecutionNotesHandler to use GetExecutionRecord
+
+This fixes both the SDK app.note() functionality and the UI notes panel
+404 errors.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
+* fix: update execution notes tests to use correct storage methods
+
+Tests were using WorkflowExecution type and StoreWorkflowExecution() to set up
+test data, but the handlers now use Execution type and GetExecutionRecord()/
+UpdateExecutionRecord() which query the executionRecords map.
+
+- Change test setup from types.WorkflowExecution to types.Execution
+- Change StoreWorkflowExecution() to CreateExecutionRecord()
+- Change GetWorkflowExecution() verification to GetExecutionRecord()
+- Rename workflowID to runID to match the Execution struct field
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
+---------
+
+Co-authored-by: Claude Opus 4.5 <noreply@anthropic.com> (5dd327e)
+
 ## [0.1.22] - 2025-12-16
 
 ## [0.1.22-rc.4] - 2025-12-16
