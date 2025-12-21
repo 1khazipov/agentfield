@@ -1,6 +1,7 @@
 import express from 'express';
 import type http from 'node:http';
 import { randomUUID } from 'node:crypto';
+import axios, { AxiosInstance } from 'axios';
 import type {
   AgentConfig,
   AgentHandler,
@@ -217,6 +218,20 @@ export class Agent {
       enabled: Boolean(this.config.didEnabled),
       defaultInput
     });
+  }
+
+  note(message: string, tags: string[] = [], metadata?: ExecutionMetadata): void {
+    const execCtx = ExecutionContext.getCurrent();
+    const execMetadata = metadata ?? execCtx?.metadata;
+    if (!execMetadata) return;
+
+    const baseUrl = (this.config.agentFieldUrl ?? 'http://localhost:8080').replace(/\/$/, '');
+    let uiApiUrl = baseUrl.replace(/\/api\/v1$/, '/api/ui/v1');
+    if (!uiApiUrl.includes('/api/ui/v1')) {
+      uiApiUrl = `${baseUrl}/api/ui/v1`;
+    }
+
+    this.agentFieldClient.sendNote(message, tags, this.config.nodeId, execMetadata, uiApiUrl, this.config.devMode);
   }
 
   async serve(): Promise<void> {

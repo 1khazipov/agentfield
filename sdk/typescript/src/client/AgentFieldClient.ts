@@ -284,4 +284,64 @@ export class AgentFieldClient {
       ...this.sanitizeHeaders(headers ?? {})
     };
   }
+
+  private buildExecutionHeaders(metadata: {
+    runId?: string;
+    executionId?: string;
+    sessionId?: string;
+    actorId?: string;
+    workflowId?: string;
+    parentExecutionId?: string;
+    callerDid?: string;
+    targetDid?: string;
+    agentNodeDid?: string;
+    agentNodeId?: string;
+  }): Record<string, string> {
+    const headers: Record<string, string> = {};
+    if (metadata.runId) headers['x-run-id'] = metadata.runId;
+    if (metadata.executionId) headers['x-execution-id'] = metadata.executionId;
+    if (metadata.sessionId) headers['x-session-id'] = metadata.sessionId;
+    if (metadata.actorId) headers['x-actor-id'] = metadata.actorId;
+    if (metadata.workflowId) headers['x-workflow-id'] = metadata.workflowId;
+    if (metadata.parentExecutionId) headers['x-parent-execution-id'] = metadata.parentExecutionId;
+    if (metadata.callerDid) headers['x-caller-did'] = metadata.callerDid;
+    if (metadata.targetDid) headers['x-target-did'] = metadata.targetDid;
+    if (metadata.agentNodeDid) headers['x-agent-node-did'] = metadata.agentNodeDid;
+    if (metadata.agentNodeId) headers['x-agent-node-id'] = metadata.agentNodeId;
+    return headers;
+  }
+
+  sendNote(message: string, tags: string[], agentNodeId: string, metadata: {
+    runId?: string;
+    executionId?: string;
+    sessionId?: string;
+    actorId?: string;
+    workflowId?: string;
+    parentExecutionId?: string;
+    callerDid?: string;
+    targetDid?: string;
+    agentNodeDid?: string;
+  }, uiApiBaseUrl: string, devMode?: boolean): void {
+    const payload = {
+      message,
+      tags: tags ?? [],
+      timestamp: Date.now() / 1000,
+      agent_node_id: agentNodeId
+    };
+
+    const executionHeaders = this.buildExecutionHeaders({ ...metadata, agentNodeId });
+    const headers = this.mergeHeaders({
+      'content-type': 'application/json',
+      ...executionHeaders
+    });
+
+    const uiHttp = axios.create({ baseURL: uiApiBaseUrl });
+    const request = uiHttp
+      .post('/executions/note', payload, {
+        headers,
+        timeout: devMode ? 5000 : 10000
+      })
+      .catch(() => {});
+    void request;
+  }
 }

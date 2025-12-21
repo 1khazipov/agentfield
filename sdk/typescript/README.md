@@ -38,3 +38,18 @@ import { StatelessRateLimiter } from '@agentfield/sdk';
 const limiter = new StatelessRateLimiter({ maxRetries: 3, baseDelay: 0.5 });
 const result = await limiter.executeWithRetry(() => makeAiCall());
 ```
+
+## Execution Notes
+
+Log execution progress with `ctx.note(message: string, tags?: string[])` for fire-and-forget debugging in the AgentField UI.
+
+```ts
+agent.reasoner('process', async (ctx) => {
+  ctx.note('Starting processing', ['debug']);
+  const result = await processData(ctx.input);
+  ctx.note(`Completed: ${result.length} items`, ['info']);
+  return result;
+});
+```
+
+**Use `note()` for AgentField UI tracking, `console.log()` for local debugging.**

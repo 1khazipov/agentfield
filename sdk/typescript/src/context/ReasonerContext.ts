@@ -81,6 +81,20 @@ export class ReasonerContext<TInput = any> {
   discover(options?: DiscoveryOptions) {
     return this.agent.discover(options);
   }
+
+  note(message: string, tags: string[] = []): void {
+    this.agent.note(message, tags, {
+      executionId: this.executionId,
+      runId: this.runId,
+      sessionId: this.sessionId,
+      actorId: this.actorId,
+      workflowId: this.workflowId,
+      parentExecutionId: this.parentExecutionId,
+      callerDid: this.callerDid,
+      targetDid: this.targetDid,
+      agentNodeDid: this.agentNodeDid
+    });
+  }
 }
 
 export function getCurrentContext<TInput = any>(): ReasonerContext<TInput> | undefined {
