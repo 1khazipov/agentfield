@@ -6,6 +6,79 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 <!-- changelog:entries -->
 
+## [0.1.26-rc.3] - 2025-12-27
+
+
+### Added
+
+- Feat(sdk/go, control-plane): Add Vector Memory Ops (#124)
+
+* chore(release): v0.1.26-rc.2
+
+* feat: added vector memory ops
+
+* test(handlers): add unit tests for GetVector and DeleteVector handlers
+
+Add comprehensive test coverage for the new vector memory endpoints:
+
+GetVectorHandler tests:
+- TestGetVectorHandler_ReturnsVectorWithMetadata: Full happy path with scope/key/metadata
+- TestGetVectorHandler_NotFound: 404 when vector doesn't exist
+- TestGetVectorHandler_StorageError: 500 on database failure
+- TestGetVectorHandler_DefaultScope: Scope resolution from headers
+
+DeleteVectorHandler tests:
+- TestDeleteVectorHandler_RESTfulDelete: DELETE with path parameter
+- TestDeleteVectorHandler_BackwardCompatibilityWithBody: POST with JSON body
+- TestDeleteVectorHandler_StorageError: 500 on database failure
+- TestDeleteVectorHandler_MissingKey: 400 when key is missing
+
+Also updated vectorStorageStub to track GetVector and DeleteVector parameters
+for assertion verification.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
+---------
+
+Co-authored-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>
+Co-authored-by: Abir Abbas <abirabbas1998@gmail.com>
+Co-authored-by: Claude Opus 4.5 <noreply@anthropic.com> (0dd4e62)
+
+
+
+### Fixed
+
+- Fix(ci): add issues:write permission for AI label workflow (#126)
+
+The `gh pr edit --add-label` command requires `issues: write` permission
+because labels are managed through the issues API in GitHub, even when
+applied to pull requests. Without this permission, the workflow fails with:
+"GraphQL: Resource not accessible by integration (addLabelsToLabelable)"
+
+Added permissions:
+- `issues: write` - Required for adding labels
+- `contents: read` - Explicit permission for checkout
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-authored-by: Claude <noreply@anthropic.com> (26a71a4)
+
+- Fix(ci): prevent shell injection in AI label workflow (#125)
+
+The PR body was being directly interpolated into a shell variable using
+`${{ github.event.pull_request.body }}`, which caused shell parsing of
+the content. When PR descriptions contained filenames like `CHANGELOG.md`
+on their own lines, the shell would attempt to execute them as commands.
+
+This fix passes the PR body via the `env:` block instead, which properly
+escapes the content as an environment variable.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-authored-by: Claude <noreply@anthropic.com> (1e2225d)
+
 ## [0.1.26-rc.2] - 2025-12-27
 
 
