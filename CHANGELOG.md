@@ -6,6 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 <!-- changelog:entries -->
 
+## [0.1.28-rc.4] - 2026-01-06
+
+
+### Chores
+
+- Chore(ci): migrate Docker publishing from GHCR to Docker Hub (#133)
+
+- Change image path from ghcr.io/agent-field/agentfield-control-plane to agentfield/control-plane
+- Update login step to use Docker Hub credentials (DOCKERHUB_USERNAME, DOCKERHUB_TOKEN)
+- Remove unused OWNER env var from Docker metadata step
+
+This enables Docker Hub analytics for image pulls. Requires adding
+DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets to the repository.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-authored-by: Claude Opus 4.5 <noreply@anthropic.com> (e6abe54)
+
+
+
+### Documentation
+
+- Docs: add Discord community badge to README (#131)
+
+Add a Discord badge near the top of README.md to invite users to join
+the community. Uses Discord's official brand color (#5865F2) and matches
+the existing badge styling.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-authored-by: Claude <noreply@anthropic.com> (81fb1c5)
+
 ## [0.1.28-rc.3] - 2026-01-05
 
 
