@@ -30,6 +30,14 @@ from .multimodal_response import (
     FileOutput,
     detect_multimodal_response,
 )
+from .media_providers import (
+    MediaProvider,
+    FalProvider,
+    LiteLLMProvider,
+    OpenRouterProvider,
+    get_provider,
+    register_provider,
+)
 
 __all__ = [
     "Agent",
@@ -61,6 +69,13 @@ __all__ = [
     "ImageOutput",
     "FileOutput",
     "detect_multimodal_response",
+    # Media providers
+    "MediaProvider",
+    "FalProvider",
+    "LiteLLMProvider",
+    "OpenRouterProvider",
+    "get_provider",
+    "register_provider",
 ]
 
 __version__ = "0.1.31"

@@ -1,6 +1,6 @@
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 from enum import Enum
 
 
@@ -338,9 +338,26 @@ class AIConfig(BaseModel):
     image_quality: Literal["low", "high"] = Field(
         default="high", description="Quality for image generation/processing."
     )
+
     audio_format: str = Field(
         default="wav", description="Default format for audio output (wav, mp3)."
     )
+
+    # Fal.ai settings
+    fal_api_key: Optional[str] = Field(
+        default=None,
+        description="Fal.ai API key. If not set, uses FAL_KEY environment variable.",
+    )
+    video_model: str = Field(
+        default="fal-ai/minimax-video/image-to-video",
+        description="Default model for video generation.",
+    )
+
+    @computed_field
+    @property
+    def image_model(self) -> str:
+        """Alias for vision_model - clearer name for image generation model."""
+        return self.vision_model
 
     # Behavior settings
     timeout: Optional[int] = Field(
@@ -490,6 +507,7 @@ class AIConfig(BaseModel):
         try:
             import litellm
 
+            litellm.suppress_debug_info = True
             # Fetch model info once and cache it
             info = litellm.get_model_info(target_model)
 

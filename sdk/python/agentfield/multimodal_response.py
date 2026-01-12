@@ -323,6 +323,112 @@ class MultimodalResponse:
         return saved_files
 
 
+def _extract_image_from_data(data: Any) -> Optional[ImageOutput]:
+    """
+    Extract an ImageOutput from various data structures.
+    Handles multiple formats: OpenRouter, OpenAI, and generic patterns.
+    """
+    if data is None:
+        return None
+
+    # Direct url/b64_json attributes (standard image generation)
+    if hasattr(data, "url") or hasattr(data, "b64_json"):
+        url = getattr(data, "url", None)
+        b64 = getattr(data, "b64_json", None)
+        if url or b64:
+            return ImageOutput(
+                url=url,
+                b64_json=b64,
+                revised_prompt=getattr(data, "revised_prompt", None),
+            )
+
+    # OpenRouter/Gemini pattern: {"type": "image_url", "image_url": {"url": "..."}}
+    if hasattr(data, "image_url"):
+        image_url_obj = data.image_url
+        url = getattr(image_url_obj, "url", None) if hasattr(image_url_obj, "url") else None
+        if url:
+            # Handle data URLs (base64 encoded)
+            if url.startswith("data:image"):
+                # Extract base64 from data URL
+                try:
+                    b64_data = url.split(",", 1)[1] if "," in url else None
+                    return ImageOutput(url=url, b64_json=b64_data, revised_prompt=None)
+                except Exception:
+                    return ImageOutput(url=url, b64_json=None, revised_prompt=None)
+            return ImageOutput(url=url, b64_json=None, revised_prompt=None)
+
+    # Dict-based patterns
+    if isinstance(data, dict):
+        # Direct url/b64_json keys
+        if "url" in data or "b64_json" in data:
+            url = data.get("url")
+            b64 = data.get("b64_json")
+            if url or b64:
+                return ImageOutput(
+                    url=url,
+                    b64_json=b64,
+                    revised_prompt=data.get("revised_prompt"),
+                )
+
+        # OpenRouter dict pattern: {"image_url": {"url": "..."}}
+        if "image_url" in data:
+            image_url_data = data["image_url"]
+            if isinstance(image_url_data, dict):
+                url = image_url_data.get("url")
+                if url:
+                    # Handle data URLs
+                    if url.startswith("data:image"):
+                        try:
+                            b64_data = url.split(",", 1)[1] if "," in url else None
+                            return ImageOutput(url=url, b64_json=b64_data, revised_prompt=None)
+                        except Exception:
+                            return ImageOutput(url=url, b64_json=None, revised_prompt=None)
+                    return ImageOutput(url=url, b64_json=None, revised_prompt=None)
+
+    return None
+
+
+def _find_images_recursive(obj: Any, max_depth: int = 10) -> List[ImageOutput]:
+    """
+    Recursively search any structure for image data.
+    This is a generalized fallback that handles unknown response formats.
+    """
+    if max_depth <= 0:
+        return []
+
+    images = []
+
+    # Try direct extraction first
+    img = _extract_image_from_data(obj)
+    if img:
+        images.append(img)
+        return images  # Found at this level, don't recurse deeper
+
+    # Handle lists/tuples
+    if isinstance(obj, (list, tuple)):
+        for item in obj:
+            images.extend(_find_images_recursive(item, max_depth - 1))
+
+    # Handle dicts
+    elif isinstance(obj, dict):
+        for value in obj.values():
+            images.extend(_find_images_recursive(value, max_depth - 1))
+
+    # Handle objects with attributes
+    elif hasattr(obj, "__dict__"):
+        for attr_name in dir(obj):
+            if attr_name.startswith("_"):
+                continue
+            try:
+                attr_val = getattr(obj, attr_name, None)
+                if attr_val is not None and not callable(attr_val):
+                    images.extend(_find_images_recursive(attr_val, max_depth - 1))
+            except Exception:
+                continue
+
+    return images
+
+
 def detect_multimodal_response(response: Any) -> MultimodalResponse:
     """
     Automatically detect and wrap multimodal content from LiteLLM responses.
@@ -338,7 +444,7 @@ def detect_multimodal_response(response: Any) -> MultimodalResponse:
     images = []
     files = []
 
-    # Handle completion responses (text + potential audio)
+    # Handle completion responses (text + potential audio + potential images)
     if hasattr(response, "choices") and response.choices:
         choice = response.choices[0]
         message = choice.message
@@ -356,6 +462,13 @@ def detect_multimodal_response(response: Any) -> MultimodalResponse:
                     format="wav",  # Default format, could be detected from response
                     url=None,
                 )
+
+        # Extract images from completion responses (OpenRouter/Gemini pattern)
+        if hasattr(message, "images") and message.images:
+            for img_data in message.images:
+                img = _extract_image_from_data(img_data)
+                if img:
+                    images.append(img)
 
     # Handle image generation responses
     elif hasattr(response, "data") and response.data:
@@ -397,6 +510,11 @@ def detect_multimodal_response(response: Any) -> MultimodalResponse:
     # Fallback to string conversion
     else:
         text = str(response)
+
+    # Fallback: if no images found yet, try recursive search
+    # This catches edge cases where images are in unexpected locations
+    if not images:
+        images = _find_images_recursive(response, max_depth=5)
 
     return MultimodalResponse(
         text=text, audio=audio, images=images, files=files, raw_response=response

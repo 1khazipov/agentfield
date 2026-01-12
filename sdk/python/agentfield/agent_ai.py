@@ -1,7 +1,12 @@
+from __future__ import annotations
+
 import json
 import os
 import re
-from typing import Any, Dict, List, Literal, Optional, Type, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Type, Union
+
+if TYPE_CHECKING:
+    from agentfield.multimodal_response import MultimodalResponse
 
 import requests
 from agentfield.agent_utils import AgentUtils
@@ -76,6 +81,23 @@ class AgentAI:
         self.agent = agent_instance
         self._initialization_complete = False
         self._rate_limiter = None
+        self._fal_provider_instance = None
+
+    @property
+    def _fal_provider(self):
+        """
+        Lazy-initialized Fal provider for image, audio, and video generation.
+
+        Returns:
+            FalProvider: Configured Fal.ai provider instance
+        """
+        if self._fal_provider_instance is None:
+            from agentfield.media_providers import FalProvider
+
+            self._fal_provider_instance = FalProvider(
+                api_key=self.agent.ai_config.fal_api_key
+            )
+        return self._fal_provider_instance
 
     def _get_rate_limiter(self) -> StatelessRateLimiter:
         """
@@ -819,6 +841,21 @@ class AgentAI:
                 self.agent.ai_config.audio_model
             )  # Use configured audio model (defaults to tts-1)
 
+        # Route based on model prefix - Fal TTS models
+        if model.startswith("fal-ai/") or model.startswith("fal/"):
+            # Combine all text inputs
+            text_input = " ".join(str(arg) for arg in args if isinstance(arg, str))
+            if not text_input:
+                text_input = "Hello, this is a test audio message."
+
+            return await self._fal_provider.generate_audio(
+                text=text_input,
+                model=model,
+                voice=voice,
+                format=format,
+                **kwargs,
+            )
+
         # Check if mode="openai_direct" is specified
         if mode == "openai_direct":
             # Use direct OpenAI client with streaming response
@@ -1087,7 +1124,16 @@ class AgentAI:
             model = "dall-e-3"  # Default image model
 
         # Route based on model prefix
-        if model.startswith("openrouter/"):
+        if model.startswith("fal-ai/") or model.startswith("fal/"):
+            # Fal: Use FalProvider for Flux, SDXL, Recraft, etc.
+            return await self._fal_provider.generate_image(
+                prompt=prompt,
+                model=model,
+                size=size,
+                quality=quality,
+                **kwargs,
+            )
+        elif model.startswith("openrouter/"):
             # OpenRouter: Use chat completions API with image modality
             return await vision.generate_image_openrouter(
                 prompt=prompt,
@@ -1155,3 +1201,287 @@ class AgentAI:
         final_kwargs = {**multimodal_params, **kwargs}
 
         return await self.ai(*args, model=model, **final_kwargs)
+
+    async def ai_generate_image(
+        self,
+        prompt: str,
+        model: Optional[str] = None,
+        size: str = "1024x1024",
+        quality: str = "standard",
+        style: Optional[str] = None,
+        response_format: str = "url",
+        **kwargs,
+    ) -> "MultimodalResponse":
+        """
+        Generate an image from a text prompt.
+
+        This is a dedicated method for image generation with a clearer name
+        than ai_with_vision. Returns a MultimodalResponse containing the
+        generated image(s).
+
+        Supported Providers:
+        - LiteLLM: DALL-E models like "dall-e-3", "dall-e-2"
+        - OpenRouter: Models like "openrouter/google/gemini-2.5-flash-image-preview"
+        - Fal.ai: Models like "fal-ai/flux/dev", "fal-ai/flux/schnell", "fal-ai/recraft-v3"
+
+        Args:
+            prompt: Text description of the image to generate
+            model: Model to use (defaults to AIConfig.vision_model, typically "dall-e-3")
+            size: Image dimensions (e.g., "1024x1024", "1792x1024") or Fal presets
+                  ("square_hd", "landscape_16_9", "portrait_4_3")
+            quality: Image quality ("standard" or "hd")
+            style: Image style for DALL-E 3 ("vivid" or "natural")
+            response_format: Output format ("url" or "b64_json")
+            **kwargs: Provider-specific parameters (e.g., image_config for OpenRouter)
+
+        Returns:
+            MultimodalResponse: Response object with .images list containing ImageOutput objects.
+                - Use response.has_images to check if generation succeeded
+                - Use response.images[0].save("path.png") to save the image
+                - Use response.images[0].get_bytes() to get raw image bytes
+
+        Examples:
+            # Basic image generation
+            result = await app.ai_generate_image("A sunset over mountains")
+            if result.has_images:
+                result.images[0].save("sunset.png")
+
+            # OpenRouter with Gemini
+            result = await app.ai_generate_image(
+                "A futuristic cityscape at night",
+                model="openrouter/google/gemini-2.5-flash-image-preview",
+                image_config={"aspect_ratio": "16:9"}
+            )
+
+            # High quality DALL-E 3
+            result = await app.ai_generate_image(
+                "A photorealistic portrait",
+                model="dall-e-3",
+                quality="hd",
+                style="natural"
+            )
+
+            # Fal.ai Flux (fast, high quality)
+            result = await app.ai_generate_image(
+                "A cyberpunk cityscape",
+                model="fal-ai/flux/dev",
+                size="landscape_16_9",
+                num_images=2
+            )
+
+            # Fal.ai Flux Schnell (fastest)
+            result = await app.ai_generate_image(
+                "A serene Japanese garden",
+                model="fal-ai/flux/schnell",
+                size="square_hd"
+            )
+        """
+        # Use configured vision/image model as default
+        if model is None:
+            model = self.agent.ai_config.vision_model
+
+        return await self.ai_with_vision(
+            prompt=prompt,
+            model=model,
+            size=size,
+            quality=quality,
+            style=style,
+            response_format=response_format,
+            **kwargs,
+        )
+
+    async def ai_generate_audio(
+        self,
+        text: str,
+        model: Optional[str] = None,
+        voice: str = "alloy",
+        format: str = "wav",
+        speed: float = 1.0,
+        **kwargs,
+    ) -> "MultimodalResponse":
+        """
+        Generate audio/speech from text (Text-to-Speech).
+
+        This is a dedicated method for audio generation with a clearer name
+        than ai_with_audio. Returns a MultimodalResponse containing the
+        generated audio.
+
+        Supported Providers:
+        - LiteLLM: OpenAI TTS models like "tts-1", "tts-1-hd", "gpt-4o-mini-tts"
+        - Fal.ai: TTS models like "fal-ai/kokoro/..." (custom deployments)
+
+        Args:
+            text: Text to convert to speech
+            model: TTS model to use (defaults to AIConfig.audio_model, typically "tts-1")
+            voice: Voice to use ("alloy", "echo", "fable", "onyx", "nova", "shimmer")
+            format: Audio format ("wav", "mp3", "opus", "aac", "flac", "pcm")
+            speed: Speech speed multiplier (0.25 to 4.0)
+            **kwargs: Provider-specific parameters
+
+        Returns:
+            MultimodalResponse: Response object with .audio containing AudioOutput.
+                - Use response.has_audio to check if generation succeeded
+                - Use response.audio.save("path.wav") to save the audio
+                - Use response.audio.get_bytes() to get raw audio bytes
+                - Use response.audio.play() to play the audio (requires pygame)
+
+        Examples:
+            # Basic speech generation
+            result = await app.ai_generate_audio("Hello, how are you today?")
+            if result.has_audio:
+                result.audio.save("greeting.wav")
+
+            # High-quality TTS with custom voice
+            result = await app.ai_generate_audio(
+                "Welcome to the presentation.",
+                model="tts-1-hd",
+                voice="nova",
+                format="mp3"
+            )
+
+            # Adjust speech speed
+            result = await app.ai_generate_audio(
+                "This is spoken slowly.",
+                speed=0.75
+            )
+        """
+        # Use configured audio model as default
+        if model is None:
+            model = self.agent.ai_config.audio_model
+
+        return await self.ai_with_audio(
+            text,
+            model=model,
+            voice=voice,
+            format=format,
+            speed=speed,
+            **kwargs,
+        )
+
+    async def ai_generate_video(
+        self,
+        prompt: str,
+        model: Optional[str] = None,
+        image_url: Optional[str] = None,
+        duration: Optional[float] = None,
+        **kwargs,
+    ) -> "MultimodalResponse":
+        """
+        Generate video from text or image.
+
+        This method generates videos using Fal.ai's video generation models.
+        Supports both text-to-video and image-to-video generation.
+
+        Supported Providers:
+        - Fal.ai: Models like "fal-ai/minimax-video/image-to-video",
+          "fal-ai/kling-video/v1/standard", "fal-ai/luma-dream-machine"
+
+        Args:
+            prompt: Text description for the video
+            model: Video model to use (defaults to AIConfig.video_model)
+            image_url: Optional input image URL for image-to-video models
+            duration: Video duration in seconds (model-dependent)
+            **kwargs: Provider-specific parameters
+
+        Returns:
+            MultimodalResponse: Response with .files containing the video.
+                - Use response.files[0].save("video.mp4") to save
+                - Use response.files[0].url to get the video URL
+
+        Examples:
+            # Image to video
+            result = await app.ai_generate_video(
+                "Camera slowly pans across the landscape",
+                model="fal-ai/minimax-video/image-to-video",
+                image_url="https://example.com/image.jpg"
+            )
+            result.files[0].save("output.mp4")
+
+            # Text to video
+            result = await app.ai_generate_video(
+                "A cat playing with yarn",
+                model="fal-ai/kling-video/v1/standard"
+            )
+
+            # Luma Dream Machine
+            result = await app.ai_generate_video(
+                "A dreamy underwater scene",
+                model="fal-ai/luma-dream-machine"
+            )
+        """
+        if model is None:
+            model = self.agent.ai_config.video_model
+
+        # Currently only Fal supports video generation
+        if not (model.startswith("fal-ai/") or model.startswith("fal/")):
+            raise ValueError(
+                f"Video generation currently only supports Fal.ai models. "
+                f"Use models like 'fal-ai/minimax-video/image-to-video'. Got: {model}"
+            )
+
+        return await self._fal_provider.generate_video(
+            prompt=prompt,
+            model=model,
+            image_url=image_url,
+            duration=duration,
+            **kwargs,
+        )
+
+    async def ai_transcribe_audio(
+        self,
+        audio_url: str,
+        model: str = "fal-ai/whisper",
+        language: Optional[str] = None,
+        **kwargs,
+    ) -> "MultimodalResponse":
+        """
+        Transcribe audio to text (Speech-to-Text).
+
+        This method transcribes audio files to text using Fal.ai's Whisper models.
+
+        Supported Providers:
+        - Fal.ai: Models like "fal-ai/whisper", "fal-ai/wizper" (2x faster)
+
+        Args:
+            audio_url: URL to audio file to transcribe
+            model: STT model to use (defaults to "fal-ai/whisper")
+            language: Optional language hint (e.g., "en", "es", "fr")
+            **kwargs: Provider-specific parameters
+
+        Returns:
+            MultimodalResponse: Response with .text containing the transcription.
+                - Use response.text to get the transcribed text
+
+        Examples:
+            # Basic transcription
+            result = await app.ai_transcribe_audio(
+                "https://example.com/audio.mp3"
+            )
+            print(result.text)
+
+            # With language hint
+            result = await app.ai_transcribe_audio(
+                "https://example.com/spanish_audio.mp3",
+                model="fal-ai/whisper",
+                language="es"
+            )
+
+            # Fast transcription with Wizper
+            result = await app.ai_transcribe_audio(
+                "https://example.com/audio.mp3",
+                model="fal-ai/wizper"
+            )
+        """
+        # Currently only Fal supports transcription
+        if not (model.startswith("fal-ai/") or model.startswith("fal/")):
+            raise ValueError(
+                f"Audio transcription currently only supports Fal.ai models. "
+                f"Use 'fal-ai/whisper' or 'fal-ai/wizper'. Got: {model}"
+            )
+
+        return await self._fal_provider.transcribe_audio(
+            audio_url=audio_url,
+            model=model,
+            language=language,
+            **kwargs,
+        )

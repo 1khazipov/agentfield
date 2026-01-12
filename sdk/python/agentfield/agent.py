@@ -2888,6 +2888,115 @@ class Agent(FastAPI):
             **kwargs,
         )
 
+    async def ai_generate_image(  # pragma: no cover - relies on external image services
+        self,
+        prompt: str,
+        model: Optional[str] = None,
+        size: str = "1024x1024",
+        quality: str = "standard",
+        style: Optional[str] = None,
+        response_format: str = "url",
+        **kwargs,
+    ) -> "MultimodalResponse":
+        """
+        Generate an image from a text prompt.
+
+        This is a dedicated method for image generation with a clearer name.
+        Returns a MultimodalResponse containing the generated image(s).
+
+        Supported Providers:
+        - LiteLLM: DALL-E models like "dall-e-3", "dall-e-2"
+        - OpenRouter: Models like "openrouter/google/gemini-2.5-flash-image-preview"
+
+        Args:
+            prompt (str): Text description of the image to generate.
+            model (str, optional): Model to use (defaults to AIConfig.vision_model).
+            size (str): Image dimensions (e.g., "1024x1024", "1792x1024").
+            quality (str): Image quality ("standard" or "hd").
+            style (str, optional): Image style for DALL-E 3 ("vivid" or "natural").
+            response_format (str): Output format ("url" or "b64_json").
+            **kwargs: Provider-specific parameters.
+
+        Returns:
+            MultimodalResponse: Response with .images list containing ImageOutput objects.
+
+        Example:
+            ```python
+            # Basic image generation
+            result = await app.ai_generate_image("A sunset over mountains")
+            if result.has_images:
+                result.images[0].save("sunset.png")
+
+            # OpenRouter with Gemini
+            result = await app.ai_generate_image(
+                "A futuristic cityscape",
+                model="openrouter/google/gemini-2.5-flash-image-preview"
+            )
+            ```
+        """
+        return await self.ai_handler.ai_generate_image(
+            prompt=prompt,
+            model=model,
+            size=size,
+            quality=quality,
+            style=style,
+            response_format=response_format,
+            **kwargs,
+        )
+
+    async def ai_generate_audio(  # pragma: no cover - relies on external audio services
+        self,
+        text: str,
+        model: Optional[str] = None,
+        voice: str = "alloy",
+        format: str = "wav",
+        speed: float = 1.0,
+        **kwargs,
+    ) -> "MultimodalResponse":
+        """
+        Generate audio/speech from text (Text-to-Speech).
+
+        This is a dedicated method for audio generation with a clearer name.
+        Returns a MultimodalResponse containing the generated audio.
+
+        Supported Providers:
+        - OpenAI TTS: Models like "tts-1", "tts-1-hd", "gpt-4o-mini-tts"
+
+        Args:
+            text (str): Text to convert to speech.
+            model (str, optional): TTS model to use (defaults to AIConfig.audio_model).
+            voice (str): Voice to use ("alloy", "echo", "fable", "onyx", "nova", "shimmer").
+            format (str): Audio format ("wav", "mp3", "opus", "aac", "flac", "pcm").
+            speed (float): Speech speed multiplier (0.25 to 4.0).
+            **kwargs: Provider-specific parameters.
+
+        Returns:
+            MultimodalResponse: Response with .audio containing AudioOutput.
+
+        Example:
+            ```python
+            # Basic speech generation
+            result = await app.ai_generate_audio("Hello, how are you today?")
+            if result.has_audio:
+                result.audio.save("greeting.wav")
+
+            # High-quality TTS
+            result = await app.ai_generate_audio(
+                "Welcome to the presentation.",
+                model="tts-1-hd",
+                voice="nova"
+            )
+            ```
+        """
+        return await self.ai_handler.ai_generate_audio(
+            text=text,
+            model=model,
+            voice=voice,
+            format=format,
+            speed=speed,
+            **kwargs,
+        )
+
     async def call(self, target: str, *args, **kwargs) -> dict:
         """
         Initiates a cross-agent call to another reasoner or skill via the AgentField execution gateway.
