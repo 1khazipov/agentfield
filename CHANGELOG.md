@@ -6,6 +6,93 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 <!-- changelog:entries -->
 
+## [0.1.32-rc.1] - 2026-01-12
+
+
+### Other
+
+- Santosh/multimodal (#144)
+
+* Fix: detect_multimodal_response now handles message.images
+
+- Add _extract_image_from_data() helper for various image formats
+- Add _find_images_recursive() for generalized fallback detection
+- Extract images from message.images (OpenRouter/Gemini pattern)
+- Handle data URLs with base64 extraction
+- Add recursive fallback search for edge cases
+
+* Add ai_generate_image and ai_generate_audio methods
+
+- Add dedicated methods for image and audio generation
+- Clearer naming than ai_with_vision/ai_with_audio
+- Full documentation with examples
+- Uses AIConfig defaults for model selection
+
+* Add image_model computed property to AIConfig
+
+- image_model is an alias for vision_model
+- Provides clearer naming for image generation model config
+- Backwards compatible - vision_model still works
+
+* Add MediaProvider abstraction with Fal, LiteLLM, OpenRouter support
+
+- MediaProvider abstract base class for unified media generation
+- FalProvider: Fal.ai integration for flux-pro, f5-tts, etc.
+- LiteLLMProvider: DALL-E, Azure, and LiteLLM-supported backends
+- OpenRouterProvider: Gemini and other OpenRouter image models
+- Provider registry with get_provider() and register_provider()
+- Easy to add custom providers by subclassing MediaProvider
+
+* Update FalProvider with correct fal-client API
+
+- Use subscribe_async() for queue-based reliable execution
+- Support fal image size presets (square_hd, landscape_16_9, etc.)
+- Add video generation with generate_video() method
+- Add audio transcription with transcribe_audio() method
+- Support all major fal models: flux/dev, flux/schnell, flux-pro
+- Add video models: minimax-video, luma-dream-machine, kling-video
+- Improve documentation with examples
+- Add seed, guidance_scale, num_inference_steps parameters
+
+* Add unified multimodal UX with FalProvider integration
+
+- Add fal_api_key and video_model to AIConfig
+- Add _fal_provider lazy property to AgentAI
+- Route fal-ai/ and fal/ prefixed models to FalProvider in:
+  - ai_with_vision() for image generation
+  - ai_with_audio() for TTS
+- Add ai_generate_video() method for video generation
+- Add ai_transcribe_audio() method for speech-to-text
+- Update docstrings with Fal examples
+- Add comprehensive tests for media providers
+
+Unified UX pattern:
+- app.ai_generate_image("...", model="fal-ai/flux/dev")  # Fal
+- app.ai_generate_image("...", model="dall-e-3")        # LiteLLM
+- app.ai_generate_video("...", model="fal-ai/minimax-video/...")
+- app.ai_transcribe_audio(url, model="fal-ai/whisper")
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
+* Fix lint errors in multimodal UX implementation
+
+- Add TYPE_CHECKING import for MultimodalResponse forward reference (F821)
+- Remove unused width/height/content_type variables in FalProvider (F841)
+- Remove unused sys/types imports in tests (F401)
+- Remove unused result variable in test (F841)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
+* Fix remaining unused variable lint error
+
+Remove unused result assignment in test_ai_generate_video_uses_default_model.
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
+---------
+
+Co-authored-by: Claude Opus 4.5 <noreply@anthropic.com> (5f781b8)
+
 ## [0.1.31] - 2026-01-12
 
 ## [0.1.31-rc.2] - 2026-01-12
