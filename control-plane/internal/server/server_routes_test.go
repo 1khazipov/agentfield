@@ -425,6 +425,86 @@ func TestSetupRoutesRegistersMetricsAndUI(t *testing.T) {
 	})
 }
 
+func TestSetupRoutesRegistersHealthEndpoint(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.TestMode)
+
+	t.Run("health endpoint returns healthy status", func(t *testing.T) {
+		srv := &AgentFieldServer{
+			Router:            gin.New(),
+			storage:           newStubStorage(),
+			payloadStore:      &stubPayloadStore{},
+			webhookDispatcher: &stubWebhookDispatcher{},
+			config: &config.Config{
+				UI:  config.UIConfig{Enabled: false},
+				API: config.APIConfig{},
+			},
+			storageHealthOverride: func(context.Context) gin.H { return gin.H{"status": "healthy"} },
+		}
+
+		srv.setupRoutes()
+
+		req, _ := http.NewRequest(http.MethodGet, "/health", nil)
+		w := httptest.NewRecorder()
+		srv.Router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+		require.Contains(t, w.Body.String(), "healthy")
+	})
+
+	t.Run("health endpoint accessible without API key", func(t *testing.T) {
+		srv := &AgentFieldServer{
+			Router:            gin.New(),
+			storage:           newStubStorage(),
+			payloadStore:      &stubPayloadStore{},
+			webhookDispatcher: &stubWebhookDispatcher{},
+			config: &config.Config{
+				UI: config.UIConfig{Enabled: false},
+				API: config.APIConfig{
+					Auth: config.AuthConfig{
+						APIKey: "super-secret-key",
+					},
+				},
+			},
+			storageHealthOverride: func(context.Context) gin.H { return gin.H{"status": "healthy"} },
+		}
+
+		srv.setupRoutes()
+
+		// Request without API key should still succeed for /health
+		req, _ := http.NewRequest(http.MethodGet, "/health", nil)
+		w := httptest.NewRecorder()
+		srv.Router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("health endpoint returns CORS headers", func(t *testing.T) {
+		srv := &AgentFieldServer{
+			Router:            gin.New(),
+			storage:           newStubStorage(),
+			payloadStore:      &stubPayloadStore{},
+			webhookDispatcher: &stubWebhookDispatcher{},
+			config: &config.Config{
+				UI:  config.UIConfig{Enabled: false},
+				API: config.APIConfig{},
+			},
+			storageHealthOverride: func(context.Context) gin.H { return gin.H{"status": "healthy"} },
+		}
+
+		srv.setupRoutes()
+
+		req, _ := http.NewRequest(http.MethodGet, "/health", nil)
+		req.Header.Set("Origin", "http://localhost:3000")
+		w := httptest.NewRecorder()
+		srv.Router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+		require.Equal(t, "http://localhost:3000", w.Header().Get("Access-Control-Allow-Origin"))
+	})
+}
+
 //nolint:unused // Reserved for future test cases
 type stubHealthMonitor struct {
 	*services.HealthMonitor

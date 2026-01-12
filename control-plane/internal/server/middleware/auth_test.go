@@ -24,6 +24,9 @@ func setupRouter(config AuthConfig) *gin.Engine {
 	router.GET("/api/v1/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
 	})
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
+	})
 	router.GET("/metrics", func(c *gin.Context) {
 		c.String(http.StatusOK, "metrics_data")
 	})
@@ -177,6 +180,23 @@ func TestAPIKeyAuth_SkipMetricsEndpoint(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestAPIKeyAuth_SkipRootHealthEndpoint(t *testing.T) {
+	// Root /health endpoint should be accessible without auth for load balancers
+	router := setupRouter(AuthConfig{APIKey: "secret-key"})
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]string
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	assert.Equal(t, "healthy", resp["status"])
 }
 
 func TestAPIKeyAuth_SkipUIPath(t *testing.T) {
