@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 <!-- changelog:entries -->
 
+## [0.1.35-rc.1] - 2026-01-21
+
+
+### Fixed
+
+- Fix: add maxTotalSockets to prevent socket exhaustion across IPv4/IPv6 (#156)
+
+The previous fix with maxSockets only limited connections per-host, but
+Railway's internal DNS returns both IPv4 and IPv6 addresses which are
+treated as separate hosts. This caused connections to grow unbounded.
+
+Adding maxTotalSockets: 50 limits total connections across ALL hosts,
+properly preventing socket exhaustion in dual-stack environments.
+
+Changes:
+- Add maxTotalSockets: 50 to all http.Agent instances
+- Remove deprecated timeout option from http.Agent
+- Bump SDK version to 0.1.35
+- Update init-example to use 0.1.35
+
+Co-authored-by: Claude <noreply@anthropic.com> (d1f4175)
+
 ## [0.1.34] - 2026-01-21
 
 ## [0.1.34-rc.1] - 2026-01-21
