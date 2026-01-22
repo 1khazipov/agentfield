@@ -6,6 +6,64 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 <!-- changelog:entries -->
 
+## [0.1.36-rc.1] - 2026-01-22
+
+
+### Fixed
+
+- Fix(sdk): prevent WebSocket socket leak in MemoryEventClient (#157)
+
+* fix(sdk): prevent WebSocket socket leak in MemoryEventClient
+
+The MemoryEventClient had several issues causing socket leaks:
+
+1. connect() didn't close the previous WebSocket before creating a new one
+2. Both 'error' and 'close' events triggered reconnect, causing duplicates
+3. No guard against concurrent reconnect scheduling
+
+This fix:
+- Adds cleanup() method to properly terminate and remove listeners
+- Adds reconnectPending flag to prevent duplicate reconnect scheduling
+- Cleans up existing WebSocket before creating a new one
+- Uses ws.terminate() for forceful socket closure
+
+This was causing the agent process to accumulate thousands of open
+socket file descriptors, eventually exhausting ephemeral ports and
+causing EADDRNOTAVAIL errors.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+* Consolidate HTTP agents and fix socket leak cleanup
+
+This commit addresses additional socket leak issues discovered during
+investigation of the WebSocket memory leak:
+
+1. Consolidated HTTP agents into shared module (utils/httpAgents.ts)
+   - Previously each client file (AgentFieldClient, MemoryClient,
+     DidClient, MCPClient) created its own HTTP agent pair
+   - Now all clients share a single pair of agents
+   - Reduces memory overhead and ensures consistent connection pooling
+
+2. Fixed setTimeout tracking in MemoryEventClient
+   - Added reconnectTimer property to store timeout ID
+   - Clear timeout in cleanup() to prevent orphaned timers
+   - Prevents potential timer leaks during rapid connect/disconnect
+
+3. Added clear() method to MCPClientRegistry
+   - Allows proper cleanup of registered MCP clients
+
+4. Increased memory test threshold from 12MB to 25MB
+   - CI environments show higher variance in GC timing
+   - Local tests show ~5MB growth, well within threshold
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+---------
+
+Co-authored-by: Claude <noreply@anthropic.com> (4bdc367)
+
 ## [0.1.35] - 2026-01-21
 
 ## [0.1.35-rc.1] - 2026-01-21
