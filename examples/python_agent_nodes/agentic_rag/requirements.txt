@@ -1,3 +1,3 @@
-agentfield>=0.1.35
+agentfield>=0.1.36
 fastembed>=0.2.0
 numpy>=1.24.0
