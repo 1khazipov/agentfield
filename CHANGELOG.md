@@ -6,6 +6,83 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 <!-- changelog:entries -->
 
+## [0.1.40-rc.1] - 2026-02-03
+
+
+### Fixed
+
+- Fix(control-plane): resolve agent node health status flapping (#169)
+
+* fix(control-plane): resolve agent node health status flapping (#167)
+
+Three independent health systems (HealthMonitor, StatusManager, PresenceManager)
+were fighting each other, causing nodes to flicker between online/stale/offline.
+
+Root causes fixed:
+- Single HTTP failure instantly marked nodes inactive (now requires 3 consecutive failures)
+- Heartbeats silently dropped for 10s after health check marked node inactive (removed)
+- 30s recovery debounce blocked legitimate recovery (reduced to configurable 5s)
+- 8s heartbeat DB cache caused phantom staleness (reduced to 2s)
+- 30s reconciliation threshold too aggressive with cache delay (increased to 60s)
+
+Changes:
+- health_monitor.go: Add consecutive failure tracking, recovery debounce, sync.Once for Stop()
+- status_manager.go: Remove heartbeat-dropping logic, configurable stale threshold
+- config.go: Add NodeHealthConfig with env var overrides
+- nodes.go: Reduce heartbeat cache from 8s to 2s
+- server.go: Wire config into health monitor and status manager
+- NodesPage.tsx: Add 30s background refresh for fresh timestamps
+
+Tests: 10 new tests (5 unit + 3 integration + 2 status manager) all passing.
+Integration tests wire all 3 services concurrently to validate no-flapping behavior.
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
+* fix(control-plane): harden health monitor against races, flapping, and stale MCP data
+
+Code review follow-up for #167. Addresses race conditions, missing MCP
+health refresh, and test reliability issues found during review.
+
+Key fixes:
+- Eliminate stale pointer race: checkAgentHealth now takes nodeID string
+  instead of *ActiveAgent, re-fetching canonical state after HTTP call
+- Fix MCP health going stale: active agents now refresh MCP data on every
+  health check, not only on status transitions
+- Initialize LastTransition on registration so debounce has a valid baseline
+- Cap consecutive failure counter to prevent unbounded growth
+- Add lifecycle guard to NodesPage polling to prevent React state updates
+  after unmount
+- Fix RecoverFromDatabase tests that raced against async goroutine
+- Extract health score magic numbers into named constants
+- Document zero-value-means-default semantics on NodeHealthConfig
+
+Tests: 30/30 health monitor + 3/3 integration tests pass
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
+* chore: retrigger CI
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+
+---------
+
+Co-authored-by: Claude Opus 4.5 <noreply@anthropic.com> (e74ed99)
+
+
+
+### Performance
+
+- Perf(ci): speed up functional tests with parallel execution and faster health checks (#159)
+
+- Add pytest-xdist for parallel test execution (-n auto)
+- Reduce health check timing from 60*2s=120s to 30*1s=30s max wait
+- Control plane typically starts in ~10-15s, so 30s is sufficient headroom
+
+These are safe, non-cache-related optimizations that should reduce
+functional test CI time by ~30-60 seconds without changing test logic.
+
+Co-authored-by: Claude Opus 4.5 <noreply@anthropic.com> (02191e1)
+
 ## [0.1.39] - 2026-01-30
 
 ## [0.1.39-rc.1] - 2026-01-30
