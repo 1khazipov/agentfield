@@ -120,7 +120,12 @@ func (s *stubStorage) MarkStaleExecutions(ctx context.Context, staleAfter time.D
 	return 0, nil
 }
 func (s *stubStorage) CleanupWorkflow(ctx context.Context, workflowID string, dryRun bool) (*types.WorkflowCleanupResult, error) {
-	return nil, nil
+	return &types.WorkflowCleanupResult{
+		Success:        true,
+		WorkflowID:     workflowID,
+		DryRun:         dryRun,
+		DeletedRecords: map[string]int{"total": 0},
+	}, nil
 }
 func (s *stubStorage) QueryWorkflowDAG(ctx context.Context, rootWorkflowID string) ([]*types.WorkflowExecution, error) {
 	return nil, nil
@@ -423,6 +428,33 @@ func TestSetupRoutesRegistersMetricsAndUI(t *testing.T) {
 		require.Equal(t, http.StatusMovedPermanently, w.Code)
 		require.Equal(t, "/ui/", w.Header().Get("Location"))
 	})
+}
+
+func TestSetupRoutesRegistersWorkflowCleanupUIRoute(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.TestMode)
+
+	srv := &AgentFieldServer{
+		Router:            gin.New(),
+		storage:           newStubStorage(),
+		payloadStore:      &stubPayloadStore{},
+		webhookDispatcher: &stubWebhookDispatcher{},
+		config: &config.Config{
+			UI:  config.UIConfig{Enabled: true, Mode: "embedded"},
+			API: config.APIConfig{},
+		},
+	}
+
+	srv.setupRoutes()
+
+	req, _ := http.NewRequest(http.MethodDelete, "/api/ui/v1/workflows/run_test_123/cleanup?confirm=true", nil)
+	w := httptest.NewRecorder()
+	srv.Router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Contains(t, w.Body.String(), `"success":true`)
+	require.Contains(t, w.Body.String(), `"workflow_id":"run_test_123"`)
 }
 
 func TestSetupRoutesRegistersHealthEndpoint(t *testing.T) {
