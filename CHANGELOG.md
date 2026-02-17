@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 <!-- changelog:entries -->
 
+## [0.1.41-rc.4] - 2026-02-17
+
+
+### Other
+
+- Fix async execution polling missing auth headers (#180)
+
+The _poll_single_execution and _batch_poll_executions methods did not
+include authentication headers when polling execution status, causing
+401 Unauthorized errors when the control plane requires API key auth.
+
+Add auth_headers parameter to AsyncExecutionManager and pass it through
+from both AgentFieldClient and Agent when creating the manager.
+
+Co-authored-by: Claude Opus 4.6 <noreply@anthropic.com> (26692de)
+
+- Add SWE-AF as first production example in README
+
+SWE-AF is an autonomous software engineering factory built on AgentField —
+one API call spins up a full engineering fleet that plans, codes, tests,
+and ships complex software end-to-end.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (56a9ffa)
+
 ## [0.1.41-rc.3] - 2026-02-10
 
 
