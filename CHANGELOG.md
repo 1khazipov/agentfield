@@ -6,6 +6,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 <!-- changelog:entries -->
 
+## [0.1.42-rc.1] - 2026-02-18
+
+
+### Added
+
+- Feat(sdk/go): add support for image inputs in ai calls (#164)
+
+* feat: add support for image and audio inputs in ai calls
+
+* fix tests
+
+* fix with image calls
+
+* mend
+
+* mend
+
+* fix: correct image serialization format and remove debug code
+
+- Use OpenAI-standard image_url format with nested {url} struct instead
+  of non-standard input_image type with flat string
+- Add MarshalJSON to Message for backward-compatible serialization
+  (single text parts serialize as plain string)
+- Remove transformForOpenRouter that was dropping Temperature, MaxTokens,
+  Stream, ResponseFormat and other request fields
+- Remove debug fmt.Printf left in production code
+- Fix case-sensitive MIME type detection (now handles .PNG, .JPG, etc.)
+- Fix typo in test ("Reponse" -> "Response")
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+---------
+
+Co-authored-by: Abir Abbas <abirabbas1998@gmail.com>
+Co-authored-by: Claude Opus 4.6 <noreply@anthropic.com> (ce9ef63)
+
 ## [0.1.41] - 2026-02-17
 
 ## [0.1.41-rc.4] - 2026-02-17
