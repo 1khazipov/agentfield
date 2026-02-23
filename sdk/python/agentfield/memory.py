@@ -1,8 +1,101 @@
 """
 Cross-Agent Persistent Memory Client for AgentField SDK.
 
-This module provides the memory interface that enables seamless, automatic memory
-sharing and synchronization across distributed agents.
+Memory Scope Hierarchy
+======================
+
+AgentField provides four memory scopes for storing agent data:
+
+Global Scope
+------------
+- Shared across all agents and sessions.
+- Persists until explicitly deleted.
+- Use for: configuration, shared knowledge bases, cross-agent state.
+
+Session Scope
+-------------
+- Scoped to a single user session (conversation).
+- Cleared when the session ends.
+- Use for: conversation context, user preferences within a session.
+
+Actor Scope
+-----------
+- Scoped to a single actor across all sessions.
+- Persists across sessions.
+- Use for: actor-specific learned data, actor configuration.
+
+Workflow Scope (Run Scope)
+--------------------------
+- Scoped to a single workflow execution.
+- Cleared when the workflow run completes.
+- Use for: intermediate results, execution-specific state.
+
+Scope Relationship
+------------------
+Conceptually, scope moves from widest to narrowest:
+
+::
+
+    Global (widest)
+        |
+    Session
+        |
+    Actor
+        |
+    Workflow/Run (narrowest)
+
+Lookup Behavior
+---------------
+When calling ``memory.get(...)`` without an explicit scope, AgentField resolves
+values from most specific to least specific and returns the first match:
+
+::
+
+    workflow -> session -> actor -> global
+
+In other words, values in narrower scopes override broader scopes for reads.
+
+Lifecycle and Data Retention
+----------------------------
+- ``global``: retained until explicitly removed (for example via ``delete``).
+- ``session``: removed when the conversation/session ends.
+- ``actor``: retained across sessions for that actor until explicitly removed.
+- ``workflow``: removed automatically when that run completes.
+
+Example Usage
+-------------
+::
+
+    # Store shared configuration in global scope.
+    await agent.memory.global_scope.set("config", {"temperature": 0.2})
+
+    # Store per-session context.
+    await agent.memory.session(session_id).set("context", {"topic": "billing"})
+
+    # Store actor preferences that survive across sessions.
+    await agent.memory.actor(actor_id).set("preferences", {"tone": "concise"})
+
+    # Store workflow-local intermediate results.
+    await agent.memory.workflow(workflow_id).set("step1_output", {"ok": True})
+
+    # Automatic hierarchical lookup from current context.
+    value = await agent.memory.get("preferences", default={})
+
+    # Explicit scope overrides with the low-level MemoryClient.
+    await memory_client.set("config", {"temperature": 0.2}, scope="global")
+    await memory_client.set(
+        "context",
+        {"topic": "billing"},
+        scope="session",
+        scope_id=session_id,
+    )
+
+Use Scope Selection as a Design Tool
+------------------------------------
+- Use ``global`` for organization-wide or system-wide defaults.
+- Use ``session`` for temporary conversation state.
+- Use ``actor`` for long-lived persona or agent specialization.
+- Use ``workflow`` for transient, per-run computation artifacts.
 """
 
 import asyncio
