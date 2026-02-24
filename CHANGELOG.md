@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 <!-- changelog:entries -->
 
+## [0.1.42-rc.2] - 2026-02-24
+
+
+### Documentation
+
+- Docs(python-sdk): document memory scope hierarchy (#184) (fde9ce2)
+
 ## [0.1.42-rc.1] - 2026-02-18
 
 
